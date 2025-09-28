@@ -9,22 +9,26 @@ use Encode qw/decode encode FB_DEFAULT/;
 use Unicode::Normalize qw/NFC NFD/;
 
 # --------------------------
-# Defaults (overridden by CLI flags)
+# Defaults (override via CLI)
 # --------------------------
-my $DELETE_ORIGINAL = 0;   # enable with --delete (deletes .flac and .cue on success)
-my $DRY_RUN         = 0;   # enable with --dry-run
+my $DELETE_ORIGINAL = 0;     # --delete    (deletes .flac and .cue after full success)
+my $DRY_RUN         = 0;     # --dry-run   (preview deletions/moves)
+my $FINAL_IN_ROOT   = 0;     # --to-root   (place final files in album dir after success)
+my $OVERWRITE_FINAL = 0;     # --overwrite-final (overwrite existing files when moving)
 my $AUDIO_EXT_OK    = qr/\.flac$/i;   # only cue+flac
-my $OUT_DIR_NAME    = 'split';
-my $REENCODE        = 1;             # 1=re-encode FLAC, 0=copy
+my $OUT_DIR_NAME    = 'split';        # used when NOT --to-root
+my $REENCODE        = 1;              # 1=re-encode FLAC, 0=copy
 my $FLAC_LEVEL      = 8;
 
 # --------------------------
-# CLI flags:  [--delete] [--dry-run] [ROOT]
+# CLI flags: [--delete] [--dry-run] [--to-root] [--overwrite-final] [ROOT]
 # --------------------------
 while (@ARGV && $ARGV[0] =~ /^--/) {
     my $f = shift @ARGV;
-    if    ($f eq '--delete')  { $DELETE_ORIGINAL = 1; next; }
-    elsif ($f eq '--dry-run') { $DRY_RUN         = 1; next; }
+    if    ($f eq '--delete')          { $DELETE_ORIGINAL = 1; next; }
+    elsif ($f eq '--dry-run')         { $DRY_RUN         = 1; next; }
+    elsif ($f eq '--to-root')         { $FINAL_IN_ROOT   = 1; next; }
+    elsif ($f eq '--overwrite-final') { $OVERWRITE_FINAL = 1; next; }
     else  { die "Unknown flag: $f\n"; }
 }
 my $ROOT = shift @ARGV // '.';
@@ -95,6 +99,28 @@ sub resolve_fs_path {
     }
     return File::Spec->catfile($dir_utf8, $name_utf8);
 }
+sub ensure_dir {
+    my ($dir_utf8) = @_;
+    my $os = os_encode($dir_utf8);
+    return 1 if -d $os;
+    mkdir $os or return 0;
+    return 1;
+}
+sub unique_path_in_dir {
+    my ($dir_utf8, $file_utf8, $allow_overwrite) = @_;
+    my ($base,$ext) = ($file_utf8 =~ /^(.*?)(\.[^.]+)?$/);
+    my $candidate = File::Spec->catfile($dir_utf8, "$base".($ext//""));
+    my $cand_os = os_encode($candidate);
+    return $candidate if $allow_overwrite || !-e $cand_os;
+
+    my $i = 1;
+    while (1) {
+        my $try = File::Spec->catfile($dir_utf8, sprintf("%s (%d)%s", $base, $i, ($ext//"")));
+        my $try_os = os_encode($try);
+        return $try unless -e $try_os;
+        $i++;
+    }
+}
 
 # --------------------------
 # CUE parsing
@@ -139,7 +165,7 @@ sub parse_cue {
 }
 
 # --------------------------
-# Split one album (+ optional deletion of .flac and .cue)
+# Split one album (+ staged → root move on success)
 # --------------------------
 sub split_album_using_cue {
     my ($cue_utf8) = @_;
@@ -165,16 +191,30 @@ sub split_album_using_cue {
     my @tracks = @{$disc->{tracks} || []};
     if (!@tracks) { say "[SKIP] $cue_utf8: no TRACK entries."; return; }
 
-    my $out_dir = File::Spec->catdir($album_dir, $OUT_DIR_NAME);
-    mkdir os_encode($out_dir) unless -d os_encode($out_dir);
+    # Choose output dir
+    my $staging_dir;
+    my $final_dir;
+    if ($FINAL_IN_ROOT) {
+        $final_dir   = $album_dir;                                   # final destination
+        $staging_dir = File::Spec->catdir($album_dir, ".split.tmp-$$");
+    } else {
+        $final_dir   = File::Spec->catdir($album_dir, $OUT_DIR_NAME); # normal behavior
+        $staging_dir = $final_dir;                                    # write directly
+    }
+
+    unless (ensure_dir($staging_dir)) {
+        say "[ERR] Cannot create output directory: $staging_dir"; return;
+    }
+    ensure_dir($final_dir) or do { say "[ERR] Cannot create final directory: $final_dir"; return; };
 
     my $album_artist = $disc->{performer} // '';
     my $album_title  = $disc->{title}     // '';
     my $date         = $disc->{rem}->{DATE}  // '';
     my $genre        = $disc->{rem}->{GENRE} // '';
 
-    my @planned;
-    my @succeeded;
+    my @planned_staged;     # staged paths we intend to create
+    my @planned_final;      # intended final filenames (in final_dir)
+    my @succeeded_staged;   # staged paths successfully created
 
     for my $i (0..$#tracks) {
         my $t = $tracks[$i];
@@ -195,9 +235,12 @@ sub split_album_using_cue {
         my $nn   = sprintf("%02d", $t->{num});
         my $base = "$nn - $t_title";
         $base =~ s/[\/\\:\*\?\"<>\|]/_/g;
-        my $out_path = File::Spec->catfile($out_dir, "$base.flac");
 
-        push @planned, $out_path;
+        my $staged_path = File::Spec->catfile($staging_dir, "$base.flac");
+        my $final_name  = "$base.flac";
+
+        push @planned_staged, $staged_path;
+        push @planned_final,  $final_name;
 
         my @cmd = (
             'ffmpeg','-hide_banner','-loglevel','error',
@@ -217,41 +260,68 @@ sub split_album_using_cue {
         if ($REENCODE) { push @cmd, ('-c:a','flac','-compression_level',$FLAC_LEVEL); }
         else           { push @cmd, ('-c','copy'); }
 
-        push @cmd, os_encode($out_path);
+        push @cmd, os_encode($staged_path);
 
-        say "[CUT] $out_path";
+        say "[CUT] $staged_path";
         if (run_cmd_ok(\@cmd)) {
-            if (-f os_encode($out_path)) {
-                my $size = (stat(os_encode($out_path)))[7] || 0;
-                push @succeeded, $out_path if $size > 0;
+            if (-f os_encode($staged_path)) {
+                my $size = (stat(os_encode($staged_path)))[7] || 0;
+                push @succeeded_staged, $staged_path if $size > 0;
             }
         } else {
             say "[ERR] ffmpeg failed for track $nn.";
         }
     }
 
-    # --------------------------
-    # Optional deletion (.flac + .cue) after full success
-    # --------------------------
-    my $planned_n   = scalar @planned;
-    my $succeeded_n = scalar @succeeded;
+    my $planned_n   = scalar @planned_staged;
+    my $succeeded_n = scalar @succeeded_staged;
 
+    # --------------------------
+    # Finalize: move staged → final dir, then delete originals if requested
+    # --------------------------
+    if ($FINAL_IN_ROOT) {
+        if ($planned_n > 0 && $planned_n == $succeeded_n) {
+            for my $idx (0..$#planned_staged) {
+                my $src  = $planned_staged[$idx];
+                my $name = $planned_final[$idx];
+                my $dst  = unique_path_in_dir($final_dir, $name, $OVERWRITE_FINAL);
+
+                if ($DRY_RUN) {
+                    say "[DRY] Would move: $src  ->  $dst";
+                } else {
+                    my $ok = rename os_encode($src), os_encode($dst);
+                    unless ($ok) { say "[ERR] Move failed: $src -> $dst ($!)"; }
+                    else         { say "[MOVE] $dst"; }
+                }
+            }
+            # Cleanup temp dir
+            if ($DRY_RUN) {
+                say "[DRY] Would remove staging dir: $staging_dir";
+            } else {
+                rmdir os_encode($staging_dir) or say "[WARN] Staging not empty: $staging_dir";
+            }
+        } else {
+            say "[KEEP] Staging kept ($succeeded_n/$planned_n ok): $staging_dir";
+        }
+    }
+
+    # Optional deletion of originals (only after full success AND (not --to-root OR moves done))
     if ($DELETE_ORIGINAL) {
         if ($planned_n > 0 && $planned_n == $succeeded_n) {
             if ($DRY_RUN) {
-                say "[DRY] Would delete original FLAC: $audio_path";
+                say "[DRY] Would delete FLAC: $audio_path";
                 say "[DRY] Would delete CUE: $cue_utf8";
             } else {
                 if (unlink os_encode($audio_path)) { say "[DEL] Deleted FLAC: $audio_path"; }
-                else { say "[ERR] Failed to delete FLAC: $audio_path ($!)"; }
-                if (unlink os_encode($cue_utf8))    { say "[DEL] Deleted CUE: $cue_utf8"; }
-                else { say "[ERR] Failed to delete CUE: $cue_utf8 ($!)"; }
+                else                               { say "[ERR] Failed to delete FLAC: $audio_path ($!)"; }
+                if (unlink os_encode($cue_utf8))   { say "[DEL] Deleted CUE: $cue_utf8"; }
+                else                               { say "[ERR] Failed to delete CUE: $cue_utf8 ($!)"; }
             }
         } else {
-            say "[KEEP] Not deleting originals (success $succeeded_n/$planned_n).";
+            say "[KEEP] Originals kept (success $succeeded_n/$planned_n).";
         }
     } else {
-        say "[KEEP] Originals kept (run with --delete to remove after success).";
+        say "[KEEP] Originals kept (use --delete to remove after success).";
     }
 }
 
@@ -273,12 +343,38 @@ for my $bin (qw/ffmpeg ffprobe perl/) {
     die "Required tool '$bin' not found in PATH.\n" unless $which;
 }
 
-say "[INFO] Delete after success: ".($DELETE_ORIGINAL ? 'ON' : 'OFF').($DRY_RUN ? ' (dry-run)' : '');
 say "[INFO] Root: $ROOT";
+say "[INFO] Final in album root: ".($FINAL_IN_ROOT ? 'ON' : 'OFF');
+say "[INFO] Overwrite existing finals: ".($OVERWRITE_FINAL ? 'ON' : 'OFF');
+say "[INFO] Delete originals after success: ".($DELETE_ORIGINAL ? 'ON' : 'OFF').($DRY_RUN ? ' (dry-run)' : '');
 find({ wanted => \&wanted, no_chdir => 1 }, $ROOT);
 
 __END__
 
+=pod
+
+USAGE:
+  chmod +x split_cue_tree.pl
+  # stage in a temp dir, then move finished tracks into the album folder
+  ./split_cue_tree.pl --to-root "/path/to/music/root"
+
+  # also delete original .flac and .cue, preview first
+  ./split_cue_tree.pl --to-root --delete --dry-run "/Volumes/media/music/lib"
+  ./split_cue_tree.pl --to-root --delete "/Volumes/media/music/lib"
+
+NOTES:
+  • When --to-root is OFF (default), files go to ./split/ as before.
+  • With --to-root, tracks are written to .split.tmp-<pid> and moved atomically
+    into the album directory after full success. If any track fails, staging is kept.
+  • Use --overwrite-final to replace existing files in the album folder; otherwise
+    the script appends “ (1)”, “ (2)”, … to avoid collisions.
+
+UNICODE:
+  • Handles UTF-8/cp1251/latin1 CUEs, macOS NFD filenames, UTF-8 tags & paths.
+
+DEPENDENCIES:
+  • ffmpeg, ffprobe, perl (no extra CPAN modules).
+=cut
 =pod
 
 USAGE:
