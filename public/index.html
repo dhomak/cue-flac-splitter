@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>// MUSIC_TOOLS</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+    :root {
+      --cyan: #00e5ff;
+      --pink: #ff4090;
+      --magenta: #ff22bb;
+      --purple: #c040ff;
+      --yellow: #ffe94d;
+      --bg: #0d0818;
+      --bg2: #130f28;
+      --bg3: #180c2e;
+      --panel-bg: #160f2a;
+      --border: #2e1a50;
+      --border-bright: #4a2878;
+      --dim: #7050a0;
+      --text: #d8cff0;
+      --text-dim: #9880c0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Share Tech Mono', 'SF Mono', Monaco, monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 20px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Ambient glow blobs — more visible */
+    body > .glow-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 55% 45% at 10% 15%, rgba(160,0,255,0.18) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 40% at 90% 80%, rgba(255,40,100,0.20) 0%, transparent 65%),
+        radial-gradient(ellipse 35% 30% at 55% 45%, rgba(255,0,170,0.09) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 80% 5%,  rgba(0,220,255,0.10) 0%, transparent 55%);
+    }
+
+    /* Scanlines — lighter so they don't darken too much */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,0.10) 3px,
+        rgba(0,0,0,0.10) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Grid — brighter lines */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,60,140,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,220,255,0.06) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 36px;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: 30px;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, var(--cyan), #ff80d0, var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 8px rgba(0,245,255,0.6)) drop-shadow(0 0 20px rgba(255,45,120,0.5));
+      position: relative;
+    }
+
+    h1::before {
+      content: '// ';
+      background: linear-gradient(90deg, var(--pink), var(--magenta));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    h1::after {
+      content: ' //';
+      background: linear-gradient(90deg, var(--magenta), var(--pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Panel base */
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-bright);
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+      padding: 20px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, var(--pink), var(--cyan), transparent);
+    }
+
+    .panel-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      color: var(--cyan);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      opacity: 0.9;
+    }
+
+    /* Directory Browser */
+    .dir-browser { }
+
+    .current-path {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .current-path input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--border-bright);
+      background: var(--bg2);
+      color: var(--text);
+      font-size: 13px;
+      font-family: 'Share Tech Mono', monospace;
+      outline: none;
+      clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .current-path input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 8px rgba(0,245,255,0.3), inset 0 0 8px rgba(0,245,255,0.05);
+    }
+
+    .current-path button, .btn-secondary {
+      padding: 10px 18px;
+      border: 1px solid var(--cyan);
+      background: transparent;
+      color: var(--cyan);
+      cursor: pointer;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+      transition: background 0.15s, box-shadow 0.15s, color 0.15s;
+    }
+
+    .current-path button:hover, .btn-secondary:hover {
+      background: rgba(0,245,255,0.1);
+      box-shadow: 0 0 12px rgba(0,245,255,0.4);
+    }
+
+    .dir-list {
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+    }
+
+    .dir-item {
+      padding: 9px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      transition: background 0.1s, color 0.1s;
+      color: var(--text-dim);
+    }
+
+    .dir-item:hover {
+      background: rgba(0,220,255,0.08);
+      color: var(--cyan);
+    }
+
+    .dir-item.parent { color: var(--dim); }
+    .dir-item.parent:hover { color: var(--text-dim); }
+    .dir-item .icon { font-size: 13px; opacity: 0.6; }
+
+    /* Selected Directory */
+    .selected-dir {
+      border: 1px solid var(--cyan);
+      background: rgba(0,245,255,0.04);
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+      position: relative;
+    }
+
+    .selected-dir::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, var(--pink), var(--cyan), transparent 60%);
+    }
+
+    .selected-dir.empty {
+      border-color: var(--magenta);
+      background: rgba(255,0,170,0.04);
+    }
+
+    .selected-dir.empty::before {
+      background: linear-gradient(90deg, var(--magenta), transparent 60%);
+    }
+
+    .selected-dir .label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 9px;
+      color: var(--cyan);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .selected-dir.empty .label { color: var(--magenta); }
+
+    .selected-dir .path {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .selected-dir button {
+      padding: 7px 14px;
+      border: 1px solid var(--magenta);
+      background: transparent;
+      color: var(--magenta);
+      cursor: pointer;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+      clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+
+    .selected-dir button:hover {
+      background: rgba(255,0,170,0.15);
+      box-shadow: 0 0 10px rgba(255,0,170,0.4);
+    }
+
+    /* Tools Grid */
+    .tools {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .tool-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-bright);
+      padding: 18px;
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+      position: relative;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tool-card::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 0; height: 0;
+      border-style: solid;
+      border-width: 0 12px 12px 0;
+      border-color: transparent var(--border-bright) transparent transparent;
+    }
+
+    .tool-card:hover {
+      border-color: rgba(255,45,120,0.5);
+      box-shadow: 0 0 24px rgba(255,45,120,0.15), 0 0 50px rgba(180,0,255,0.08), inset 0 0 20px rgba(255,45,120,0.03);
+    }
+
+    .tool-card h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+      color: var(--yellow);
+      text-shadow: 0 0 6px rgba(245,230,66,0.5);
+      text-transform: uppercase;
+    }
+
+    .tool-card p {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+
+    .tool-options {
+      flex: 1;
+      margin-bottom: 14px;
+    }
+
+    .tool-options label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      color: var(--text);
+      transition: color 0.15s;
+    }
+
+    .tool-options label:hover { color: var(--cyan); }
+
+    .tool-options input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      accent-color: var(--cyan);
+      cursor: pointer;
+    }
+
+    .tool-options input[type="text"],
+    .tool-options textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border-bright);
+      background: var(--bg2);
+      color: var(--text);
+      font-size: 12px;
+      font-family: 'Share Tech Mono', monospace;
+      margin-top: 5px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .tool-options input[type="text"]:focus,
+    .tool-options textarea:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 8px rgba(0,220,255,0.25);
+    }
+
+    .run-btn {
+      width: 100%;
+      padding: 11px;
+      border: 1px solid var(--magenta);
+      background: transparent;
+      color: var(--magenta);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      cursor: pointer;
+      clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+      transition: background 0.15s, box-shadow 0.15s, color 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .run-btn::before {
+      content: '> ';
+      opacity: 0.6;
+    }
+
+    .run-btn:hover {
+      background: rgba(255,0,170,0.15);
+      box-shadow: 0 0 16px rgba(255,0,170,0.5), inset 0 0 16px rgba(255,0,170,0.08);
+    }
+
+    .run-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .run-btn.running {
+      border-color: var(--yellow);
+      color: var(--yellow);
+      animation: pulse 1s infinite;
+    }
+
+    .run-btn.running:hover {
+      background: rgba(245,230,66,0.1);
+      box-shadow: 0 0 16px rgba(245,230,66,0.4);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 10px rgba(245,230,66,0.4); }
+      50% { opacity: 0.6; box-shadow: 0 0 20px rgba(245,230,66,0.7); }
+    }
+
+    /* Output Console */
+    .console {
+      background: var(--bg2);
+      border: 1px solid var(--border-bright);
+      clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+      position: relative;
+    }
+
+    .console::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--pink), var(--purple), var(--cyan), transparent);
+      box-shadow: 0 0 10px rgba(255,45,120,0.6);
+    }
+
+    .console-header {
+      background: var(--bg3);
+      padding: 11px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-bright);
+    }
+
+    .console-header h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--cyan);
+      text-transform: uppercase;
+    }
+
+    .console-header button {
+      padding: 5px 12px;
+      border: 1px solid var(--border-bright);
+      background: transparent;
+      color: var(--text-dim);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .console-header button:hover {
+      border-color: var(--magenta);
+      color: var(--magenta);
+    }
+
+    .console-output {
+      padding: 14px 18px;
+      height: 320px;
+      overflow-y: auto;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+    }
+
+    .console-output .stdout { color: #00e676; }
+    .console-output .stderr { color: var(--yellow); }
+    .console-output .error { color: #ff3d71; }
+    .console-output .info { color: var(--cyan); }
+
+    /* Status indicator */
+    .status {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 8px;
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    }
+
+    .status.idle { background: var(--border-bright); }
+    .status.running { background: #00e676; animation: blink 0.8s infinite; box-shadow: 0 0 6px #00e676; }
+    .status.error { background: #ff3d71; box-shadow: 0 0 6px #ff3d71; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border-bright); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+
+    /* Error state */
+    .error-msg {
+      background: rgba(255,61,113,0.1);
+      border: 1px solid #ff3d71;
+      color: #ff3d71;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+    }
+
+    /* RuTracker textarea override */
+    #rutracker-urls {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border-bright);
+      background: var(--bg2);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      resize: vertical;
+      outline: none;
+    }
+
+    #rutracker-urls:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 8px rgba(0,220,255,0.25);
+    }
+
+    /* ── Drag title bar ── */
+    .titlebar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 38px;
+      -webkit-app-region: drag;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      z-index: 10000;
+      background: rgba(13, 8, 24, 0.92);
+      border-bottom: 1px solid var(--border-bright);
+      backdrop-filter: blur(8px);
+      user-select: none;
+    }
+
+    .titlebar::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, var(--pink), var(--cyan), transparent 70%);
+    }
+
+    .titlebar-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--cyan);
+      opacity: 0.7;
+      width: 100%;
+      text-align: center;
+      padding-left: 70px; /* offset for native traffic lights */
+    }
+
+    /* push content below the fixed bar */
+    body { padding-top: 58px; }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <div class="titlebar-title">// MUSIC_TOOLS //</div>
+  </div>
+  <div class="glow-layer"></div>
+  <div class="container">
+    <h1>MUSIC_TOOLS</h1>
+
+    <!-- Selected Working Directory -->
+    <div class="selected-dir empty" id="selectedDir">
+      <div>
+        <div class="label">Working Directory</div>
+        <div class="path" id="selectedPath">No directory selected</div>
+      </div>
+      <button onclick="clearSelection()" id="clearBtn" style="display:none">Clear</button>
+    </div>
+
+    <!-- Directory Browser -->
+    <div class="panel dir-browser">
+      <div class="panel-label">Browse &amp; Select Directory</div>
+      <div class="current-path">
+        <input type="text" id="pathInput" placeholder="/path/to/music">
+        <button onclick="navigateAndSelect(document.getElementById('pathInput').value)">Go</button>
+      </div>
+      <div id="errorMsg"></div>
+      <div class="dir-list" id="dirList"></div>
+    </div>
+
+    <!-- Tools -->
+
+    <div class="tools">
+      <!-- Split CUE -->
+      <div class="tool-card">
+        <h3>Split CUE</h3>
+        <p>Split single-file FLAC albums using CUE sheets into individual tracks.</p>
+        <div class="tool-options">
+          <label><input type="checkbox" id="split-toRoot" checked> Place tracks in album folder</label>
+          <label><input type="checkbox" id="split-delete"> Delete originals after success</label>
+          <label><input type="checkbox" id="split-dryRun"> Dry run (preview only)</label>
+          <label><input type="checkbox" id="split-overwrite"> Overwrite existing files</label>
+        </div>
+        <button class="run-btn" onclick="runScript('split-cue', getSplitOptions())">Run Split CUE</button>
+      </div>
+
+      <!-- Downsample -->
+      <div class="tool-card">
+        <h3>FLAC Downsampler</h3>
+        <p>Convert hi-res FLAC files to CD quality (44.1kHz / 16-bit).</p>
+        <div class="tool-options">
+          <label><input type="checkbox" id="ds-replace"> Replace original files</label>
+          <label>Output directory (optional):
+            <input type="text" id="ds-outputDir" placeholder="Leave empty for ./downsampled">
+          </label>
+        </div>
+        <button class="run-btn" onclick="runScript('downsample', getDownsampleOptions())">Run Downsampler</button>
+      </div>
+
+      <!-- Lyrics -->
+      <div class="tool-card">
+        <h3>Lyrics Fetcher</h3>
+        <p>Fetch lyrics from online APIs for FLAC, MP3, and M4A files.</p>
+        <div class="tool-options">
+          <p style="color:#666; font-size:12px;">Uses LRCLIB, ChartLyrics, and lyrics.ovh</p>
+        </div>
+        <button class="run-btn" onclick="runScript('lyrics', {})">Fetch Lyrics</button>
+      </div>
+
+
+      <!-- RuTracker Scraper -->
+      <div class="tool-card" style="grid-column: 1 / -1;">
+        <h3>RuTracker Magnet Scraper</h3>
+        <p>Extract magnet links from RuTracker torrent pages. Paste URLs (one per line).</p>
+        <div class="tool-options">
+          <textarea id="rutracker-urls" rows="5" placeholder="https://rutracker.net/forum/viewtopic.php?t=123456
+https://rutracker.net/forum/viewtopic.php?t=789012"></textarea>
+        </div>
+        <button class="run-btn" onclick="runRutracker()">Extract Magnet Links</button>
+        <div id="magnet-output-wrapper" style="display:none; margin-top:12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="font-size:0.85em; color:var(--cyan);">Magnet Links</span>
+            <button onclick="copyMagnets()" style="font-size:0.8em; padding:3px 10px; background:var(--cyan); color:#000; border:none; cursor:pointer;">Copy All</button>
+          </div>
+          <textarea id="magnet-output" rows="4" readonly style="width:100%; background:#0a0a14; color:#e0e0e0; border:1px solid var(--border-bright); padding:8px; font-family:monospace; font-size:0.8em; resize:vertical;"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Console Output -->
+    <div class="console">
+      <div class="console-header">
+        <h2><span class="status idle" id="statusIndicator"></span>Output</h2>
+        <div style="display:flex;gap:8px">
+          <button id="stopBtn" onclick="stopCurrentJob()" style="display:none;border-color:var(--pink);color:var(--pink)">Stop</button>
+          <button onclick="clearConsole()">Clear</button>
+        </div>
+      </div>
+      <div class="console-output" id="consoleOutput">Ready. Select a directory and run a tool.</div>
+    </div>
+  </div>
+
+  <script>
+    let currentBrowsePath = '';
+    let selectedWorkingDir = '';
+    let currentEventSource = null;
+    let currentProcessId = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Restore last selected directory
+      const lastSelected = localStorage.getItem('selectedWorkingDir');
+      if (lastSelected) {
+        selectedWorkingDir = lastSelected;
+        updateSelectedDisplay();
+      }
+
+      // Start browsing from last path or home; fall back if stored path is gone
+      const startPath = localStorage.getItem('lastBrowsePath') || '/Users';
+      const ok = await navigateTo(startPath);
+      if (!ok && startPath !== '/Users') {
+        localStorage.removeItem('lastBrowsePath');
+        navigateTo('/Users');
+      }
+    });
+
+    // Navigate to directory (browsing). Returns true on success, false on failure.
+    async function navigateTo(path) {
+      const errorDiv = document.getElementById('errorMsg');
+      errorDiv.innerHTML = '';
+
+      try {
+        const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          errorDiv.innerHTML = `<div class="error-msg">${body.error || `Server error (${res.status})`}</div>`;
+          return false;
+        }
+
+        const data = await res.json();
+
+        if (data.error) {
+          errorDiv.innerHTML = `<div class="error-msg">${data.error}</div>`;
+          return false;
+        }
+
+        currentBrowsePath = data.current;
+        document.getElementById('pathInput').value = currentBrowsePath;
+        localStorage.setItem('lastBrowsePath', currentBrowsePath);
+
+        const dirList = document.getElementById('dirList');
+        dirList.innerHTML = '';
+
+        // Parent directory
+        if (data.parent !== data.current) {
+          const parent = document.createElement('div');
+          parent.className = 'dir-item parent';
+          parent.innerHTML = '<span class="icon">📁</span> ..';
+          parent.onclick = () => navigateTo(data.parent);
+          dirList.appendChild(parent);
+        }
+
+        // Subdirectories
+        data.items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'dir-item';
+          div.innerHTML = `<span class="icon">📁</span> ${item.name}`;
+          div.onclick = () => navigateTo(item.path);
+          dirList.appendChild(div);
+        });
+
+        return true;
+
+      } catch (err) {
+        errorDiv.innerHTML = `<div class="error-msg">Failed to browse: ${err.message}. Make sure the server is running (npm start).</div>`;
+        return false;
+      }
+    }
+
+    // Navigate and select directory
+    async function navigateAndSelect(path) {
+      await navigateTo(path);
+      if (currentBrowsePath) {
+        selectedWorkingDir = currentBrowsePath;
+        localStorage.setItem('selectedWorkingDir', selectedWorkingDir);
+        updateSelectedDisplay();
+        log('info', `Selected working directory: ${selectedWorkingDir}`);
+      }
+    }
+
+    // Select current browsed directory as working directory
+    function selectCurrentDir() {
+      if (!currentBrowsePath) {
+        alert('Please browse to a directory first.');
+        return;
+      }
+
+      selectedWorkingDir = currentBrowsePath;
+      localStorage.setItem('selectedWorkingDir', selectedWorkingDir);
+      updateSelectedDisplay();
+      log('info', `Selected working directory: ${selectedWorkingDir}`);
+    }
+
+    // Update the selected directory display
+    function updateSelectedDisplay() {
+      const container = document.getElementById('selectedDir');
+      const pathEl = document.getElementById('selectedPath');
+      const clearBtn = document.getElementById('clearBtn');
+
+      if (selectedWorkingDir) {
+        container.classList.remove('empty');
+        pathEl.textContent = selectedWorkingDir;
+        clearBtn.style.display = 'block';
+      } else {
+        container.classList.add('empty');
+        pathEl.textContent = 'No directory selected';
+        clearBtn.style.display = 'none';
+      }
+    }
+
+    // Clear selection
+    function clearSelection() {
+      selectedWorkingDir = '';
+      localStorage.removeItem('selectedWorkingDir');
+      updateSelectedDisplay();
+    }
+
+    // Get options for split-cue
+    function getSplitOptions() {
+      return {
+        toRoot: document.getElementById('split-toRoot').checked,
+        delete: document.getElementById('split-delete').checked,
+        dryRun: document.getElementById('split-dryRun').checked,
+        overwriteFinal: document.getElementById('split-overwrite').checked
+      };
+    }
+
+    // Get options for downsampler
+    function getDownsampleOptions() {
+      return {
+        replace: document.getElementById('ds-replace').checked,
+        outputDir: document.getElementById('ds-outputDir').value || ''
+      };
+    }
+
+    // Run a script
+    function runScript(script, options) {
+      if (!selectedWorkingDir) {
+        log('error', 'Please select a working directory first. Browse to a folder and click "Select This Directory".');
+        return;
+      }
+
+      // Close any existing connection
+      if (currentEventSource) {
+        currentEventSource.close();
+      }
+
+      // Build query string
+      const params = new URLSearchParams({ dir: selectedWorkingDir, ...options });
+      const url = `/api/run/${script}?${params}`;
+
+      clearConsole();
+      log('info', `Starting ${script} in ${selectedWorkingDir}...`);
+      setStatus('running');
+      setButtonsDisabled(true);
+
+      currentEventSource = new EventSource(url);
+
+      currentEventSource.onmessage = (event) => {
+        const { type, data } = JSON.parse(event.data);
+
+        switch (type) {
+          case 'started':
+            currentProcessId = data.processId;
+            break;
+          case 'stdout':
+            log('stdout', data);
+            break;
+          case 'stderr':
+            log('stderr', data);
+            break;
+          case 'error':
+            log('error', data);
+            break;
+          case 'exit':
+            log('info', `\nProcess exited with code ${data.code}`);
+            setStatus(data.code === 0 ? 'idle' : 'error');
+            setButtonsDisabled(false);
+            currentEventSource.close();
+            currentEventSource = null;
+            currentProcessId = null;
+            break;
+        }
+      };
+
+      currentEventSource.onerror = () => {
+        log('error', 'Connection lost. Make sure the server is running.');
+        setStatus('error');
+        setButtonsDisabled(false);
+        currentEventSource.close();
+        currentEventSource = null;
+      };
+    }
+
+    // Log to console
+    function log(type, message) {
+      const output = document.getElementById('consoleOutput');
+      const span = document.createElement('span');
+      span.className = type;
+      span.textContent = message;
+      output.appendChild(span);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    // Clear console
+    function clearConsole() {
+      document.getElementById('consoleOutput').innerHTML = '';
+    }
+
+    // Set status indicator
+    function setStatus(status) {
+      const indicator = document.getElementById('statusIndicator');
+      indicator.className = `status ${status}`;
+    }
+
+    // Disable/enable buttons
+    function setButtonsDisabled(disabled) {
+      document.querySelectorAll('.run-btn').forEach(btn => {
+        btn.disabled = disabled;
+        btn.classList.toggle('running', disabled);
+      });
+      const stopBtn = document.getElementById('stopBtn');
+      if (stopBtn) {
+        stopBtn.style.display = disabled ? '' : 'none';
+        stopBtn.disabled = false;
+        stopBtn.textContent = 'Stop';
+      }
+    }
+
+    // Stop current job
+    async function stopCurrentJob() {
+      if (!currentProcessId) return;
+      const btn = document.getElementById('stopBtn');
+      btn.disabled = true;
+      btn.textContent = 'Stopping...';
+      try {
+        await fetch(`/api/stop/${currentProcessId}`, { method: 'POST' });
+      } catch (e) {}
+    }
+
+    // Handle Enter key in path input
+    document.getElementById('pathInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        navigateTo(e.target.value);
+      }
+    });
+
+    // Run RuTracker scraper
+    async function runRutracker() {
+      const textarea = document.getElementById('rutracker-urls');
+      const text = textarea.value.trim();
+
+      if (!text) {
+        log('error', 'Please paste RuTracker URLs into the text area.');
+        return;
+      }
+
+      // Parse URLs from text
+      const urlPattern = /https?:\/\/rutracker\.net\/forum\/viewtopic\.php\?t=\d+/g;
+      const urls = text.match(urlPattern);
+
+      if (!urls || urls.length === 0) {
+        log('error', 'No valid RuTracker URLs found. URLs should be in format: https://rutracker.net/forum/viewtopic.php?t=123456');
+        return;
+      }
+
+      // Remove duplicates
+      const uniqueUrls = [...new Set(urls)];
+
+      clearConsole();
+      document.getElementById('magnet-output-wrapper').style.display = 'none';
+      document.getElementById('magnet-output').value = '';
+      log('info', `Found ${uniqueUrls.length} unique RuTracker URL(s). Starting scraper...\n`);
+      setStatus('running');
+      setButtonsDisabled(true);
+
+      let inMagnets = false;
+      const collectedMagnets = [];
+
+      try {
+        const response = await fetch('/api/run/rutracker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: uniqueUrls })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const { type, data } = JSON.parse(line.slice(6));
+                switch (type) {
+                  case 'started':
+                    currentProcessId = data.processId;
+                    break;
+                  case 'stdout':
+                    // Parse magnet summary block without showing it in console
+                    for (const l of data.split('\n')) {
+                      if (l.trim() === '%%MAGNETS_START%%') { inMagnets = true; continue; }
+                      if (l.trim() === '%%MAGNETS_END%%')   { inMagnets = false; continue; }
+                      if (inMagnets) { if (l.trim()) collectedMagnets.push(l.trim()); continue; }
+                      log('stdout', l + '\n');
+                    }
+                    break;
+                  case 'stderr':
+                    log('stderr', data);
+                    break;
+                  case 'error':
+                    log('error', data);
+                    break;
+                  case 'exit':
+                    if (collectedMagnets.length > 0) {
+                      document.getElementById('magnet-output').value = collectedMagnets.join('\n');
+                      document.getElementById('magnet-output-wrapper').style.display = 'block';
+                    }
+                    log('info', `\nProcess exited with code ${data.code}`);
+                    setStatus(data.code === 0 ? 'idle' : 'error');
+                    setButtonsDisabled(false);
+                    currentProcessId = null;
+                    break;
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (err) {
+        log('error', `Failed to run scraper: ${err.message}`);
+        setStatus('error');
+        setButtonsDisabled(false);
+      }
+    }
+
+    function copyMagnets() {
+      const ta = document.getElementById('magnet-output');
+      ta.select();
+      navigator.clipboard.writeText(ta.value).catch(() => document.execCommand('copy'));
+    }
+  </script>
+</body>
+</html>
