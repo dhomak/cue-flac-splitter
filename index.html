@@ -1589,39 +1589,38 @@ async function runCueConv() {
 }
 
 /* ── Browser modal ── */
-let browserTarget = null, browserCurrentPath = '';
+let browserTarget = null, browserCurrentPath = '/';
 function openBrowser(inputId) {
-  browserTarget = inputId; browserCurrentPath = '';
+  browserTarget = inputId; browserCurrentPath = '/';
   document.getElementById('browser-modal').classList.add('open');
-  loadDir('');
+  loadDir('/');
 }
 function closeModal() {
   document.getElementById('browser-modal').classList.remove('open'); browserTarget = null;
 }
 function selectCurrentDir() {
-  if (browserTarget) document.getElementById(browserTarget).value = '{{ music_root }}/' + browserCurrentPath;
+  if (browserTarget) document.getElementById(browserTarget).value = browserCurrentPath;
   closeModal();
 }
-async function loadDir(relPath) {
-  browserCurrentPath = relPath;
-  document.getElementById('browser-path').textContent = '/' + relPath;
+async function loadDir(absPath) {
+  browserCurrentPath = absPath;
+  document.getElementById('browser-path').textContent = absPath;
   const list = document.getElementById('browser-list');
   list.innerHTML = '<div style="padding:14px 20px;color:var(--dim);font-size:10px">Loading...</div>';
-  const r = await fetch('/api/browse?path=' + encodeURIComponent(relPath));
+  const r = await fetch('/api/browse?path=' + encodeURIComponent(absPath));
   const d = await r.json();
   if (d.error) { list.innerHTML = `<div style="padding:14px 20px;color:var(--err);font-size:10px">${d.error}</div>`; return; }
   list.innerHTML = '';
-  if (relPath) {
-    const parts = relPath.split('/'); parts.pop();
+  if (d.parent && d.parent !== absPath) {
     const item = document.createElement('div'); item.className = 'modal-item';
     item.innerHTML = '<span class="modal-icon">↑</span> ..';
-    item.onclick = () => loadDir(parts.join('/')); list.appendChild(item);
+    item.onclick = () => loadDir(d.parent); list.appendChild(item);
   }
   d.entries.forEach(entry => {
     const item = document.createElement('div');
     item.className = 'modal-item' + (entry.is_dir ? '' : ' file');
     item.innerHTML = `<span class="modal-icon">${entry.is_dir ? '▸' : '·'}</span> ${entry.name}`;
-    if (entry.is_dir) item.onclick = () => loadDir(entry.rel_path);
+    if (entry.is_dir) item.onclick = () => loadDir(entry.path);
     list.appendChild(item);
   });
 }

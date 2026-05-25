@@ -101,16 +101,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Directory browser ─────────────────────────────────────────────────────────
 
-// Accepts a path relative to MUSIC_ROOT (empty = MUSIC_ROOT itself).
-// Returns: { entries: [{ name, is_dir, rel_path }] }
+// Accepts any absolute path. Returns: { current, parent, entries: [{ name, is_dir, path }] }
 app.get('/api/browse', (req, res) => {
-  const relPath = (req.query.path || '').replace(/^\/+/, '');
-  const absPath = relPath ? path.resolve(MUSIC_ROOT, relPath) : MUSIC_ROOT;
-
-  // Security: keep traversal within MUSIC_ROOT
-  if (!absPath.startsWith(MUSIC_ROOT)) {
-    return res.status(403).json({ error: 'Access denied' });
-  }
+  const reqPath = req.query.path || '/';
+  const absPath = path.isAbsolute(reqPath) ? reqPath : path.resolve(MUSIC_ROOT, reqPath);
+  const parent  = path.dirname(absPath);
 
   try {
     const items = fs.readdirSync(absPath, { withFileTypes: true });
@@ -121,11 +116,11 @@ app.get('/api/browse', (req, res) => {
         return a.name.localeCompare(b.name);
       })
       .map(item => ({
-        name:     item.name,
-        is_dir:   item.isDirectory(),
-        rel_path: path.relative(MUSIC_ROOT, path.join(absPath, item.name)),
+        name:   item.name,
+        is_dir: item.isDirectory(),
+        path:   path.join(absPath, item.name),
       }));
-    res.json({ entries });
+    res.json({ current: absPath, parent, entries });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
