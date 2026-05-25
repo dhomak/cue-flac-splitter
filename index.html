@@ -377,10 +377,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px 0 20px;
+    padding: 0 24px 0 80px; /* 80px left clears macOS traffic-light buttons */
     border-bottom: 1px solid var(--border);
     background: color-mix(in srgb, var(--bg) 85%, transparent);
     backdrop-filter: blur(16px);
+    -webkit-app-region: drag; /* makes header a window drag handle */
+  }
+  /* Interactive elements inside the draggable header must opt out */
+  header button, header input, header a, header .theme-switcher {
+    -webkit-app-region: no-drag;
   }
   header::after {
     content: '';
