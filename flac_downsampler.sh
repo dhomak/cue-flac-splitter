@@ -3,10 +3,11 @@
 # FLAC Downsampler to 44.1kHz/16-bit using ffmpeg
 # Usage: ./downsample_flac.sh [options] [input_directory] [output_directory]
 
-set -e  # Exit on any error
+# Note: Not using set -e as we handle errors manually with counters
 
 # Default options
 REPLACE_ORIGINALS=false
+SKIP_CONFIRM=false
 
 # Color codes for output
 RED='\033[0;31m'
@@ -179,6 +180,10 @@ main() {
                 REPLACE_ORIGINALS=true
                 shift
                 ;;
+            -y|--yes)
+                SKIP_CONFIRM=true
+                shift
+                ;;
             -h|--help)
                 show_help
                 exit 0
@@ -197,11 +202,15 @@ main() {
     if [ "$REPLACE_ORIGINALS" = true ]; then
         output_dir="$input_dir"
         print_warning "REPLACE MODE: Original files will be overwritten!"
-        echo -n "Are you sure you want to continue? (yes/no): "
-        read confirmation
-        if [ "$confirmation" != "yes" ]; then
-            print_status "Operation cancelled"
-            exit 0
+        if [ "$SKIP_CONFIRM" = false ]; then
+            echo -n "Are you sure you want to continue? (yes/no): "
+            read confirmation
+            if [ "$confirmation" != "yes" ]; then
+                print_status "Operation cancelled"
+                exit 0
+            fi
+        else
+            print_status "Confirmation skipped (--yes flag)"
         fi
     fi
     
@@ -238,7 +247,7 @@ main() {
     for file in "${flac_files[@]}"; do
         # Get the directory containing the file
         local file_dir=$(dirname "$file")
-        
+
         # Calculate relative path using Python for reliable handling of special characters
         local relative_path=$(python3 -c "
 import os
@@ -248,18 +257,18 @@ file_path = '''$file'''
 rel_path = os.path.relpath(file_path, input_dir)
 print(rel_path)
 ")
-        
+
         local output_file="$output_dir/$relative_path"
-        
-        local result=0
-        downsample_file "$file" "$output_file" "$relative_path" "$REPLACE_ORIGINALS" || result=$?
-        
+
+        downsample_file "$file" "$output_file" "$relative_path" "$REPLACE_ORIGINALS"
+        local result=$?
+
         if [ $result -eq 0 ]; then
-            ((processed++))
+            processed=$((processed + 1))
         elif [ $result -eq 2 ]; then
-            ((skipped++))
+            skipped=$((skipped + 1))
         else
-            ((failed++))
+            failed=$((failed + 1))
         fi
         echo
     done
@@ -291,6 +300,7 @@ show_help() {
     echo
     echo "Options:"
     echo "  -r, --replace     Replace original files instead of creating copies"
+    echo "  -y, --yes         Skip confirmation prompt (use with --replace)"
     echo "  -h, --help        Show this help message"
     echo
     echo "Arguments:"

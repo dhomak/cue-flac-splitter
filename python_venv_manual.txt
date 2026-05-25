@@ -1,0 +1,14 @@
+# Activate venv
+source venv/bin/activate
+
+# Check what's installed
+pip list
+
+# Install new package
+pip install package_name
+
+# Deactivate venv
+deactivate
+
+# Delete venv (if you want to start over)
+rm -rf venv

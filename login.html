@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Music Tools — Authentication</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700;900&family=Noto+Sans+JP:wght@700;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --red:    #cc0000;
+  --red2:   #880000;
+  --red3:   #440000;
+  --amber:  #ff9900;
+  --amber2: #cc6600;
+  --dim:    #ff2200;
+  --panel:  #0d0000;
+  --panelborder: #660000;
+  --text:   #ff4400;
+  --white:  #ede0d0;
+  --mono:   'Share Tech Mono', monospace;
+  --cond:   'Barlow Condensed', sans-serif;
+  --jp:     'Noto Sans JP', sans-serif;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: var(--white);
+  font-family: var(--mono);
+}
+
+/* ── scanlines ── */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,.12) 2px, rgba(0,0,0,.12) 4px
+  );
+  pointer-events: none;
+}
+
+/* ── red ambient ── */
+.ambient {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(180,0,0,.12) 0%, transparent 70%);
+}
+
+/* ══════════════════════════════
+   LAYOUT — 5 rows
+══════════════════════════════ */
+.frame {
+  position: relative; z-index: 1;
+  width: 100vw; height: 100vh;
+  display: grid;
+  grid-template-rows: 52px 38px 28px 1fr 28px 38px 52px;
+}
+
+/* ── TOP INFO BAR ── */
+.top-bar {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--panelborder);
+  background: var(--panel);
+  position: relative;
+}
+.top-bar::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--red), var(--red2), transparent);
+}
+
+.clock-wrap {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.clock-label {
+  font-size: 7px; letter-spacing: 3px; color: var(--red); text-transform: uppercase;
+}
+.clock-display {
+  font-family: var(--mono);
+  font-size: 28px;
+  color: var(--dim);
+  letter-spacing: 2px;
+  line-height: 1;
+  text-shadow: 0 0 10px rgba(255,34,0,.5), 0 0 2px rgba(255,34,0,.8);
+}
+
+.top-center {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.top-center-label {
+  font-size: 7px; letter-spacing: 3px; color: var(--red2); text-transform: uppercase;
+}
+.top-center-val {
+  font-family: var(--cond);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 2px; color: var(--text);
+  text-transform: uppercase;
+}
+
+.top-right {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+}
+.top-right-label {
+  font-size: 7px; letter-spacing: 3px; color: var(--red2); text-transform: uppercase;
+  border: 1px solid var(--red3); padding: 2px 8px;
+}
+.top-right-val {
+  font-size: 9px; letter-spacing: 2px; color: var(--text); text-transform: uppercase;
+}
+
+/* ── HAZARD BAND ── */
+.hazard-band {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--amber) 0, var(--amber) 14px,
+    #000 14px, #000 28px
+  );
+  position: relative;
+}
+
+/* ── 非常事態 BAR ── */
+.jap-bar {
+  background: var(--amber2);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  border-top: 1px solid var(--amber);
+  border-bottom: 1px solid var(--amber);
+}
+.jap-bar::before, .jap-bar::after {
+  content: '';
+  position: absolute; top: 0; bottom: 0; width: 60px;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--amber) 0, var(--amber) 6px,
+    var(--amber2) 6px, var(--amber2) 12px
+  );
+}
+.jap-bar::before { left: 0; }
+.jap-bar::after  { right: 0; }
+.jap-text {
+  font-family: var(--jp);
+  font-size: 15px;
+  font-weight: 900;
+  color: #000;
+  letter-spacing: 6px;
+  z-index: 1;
+  text-shadow: none;
+}
+
+/* ── MAIN AREA ── */
+.main-area {
+  display: grid;
+  grid-template-columns: 240px 1fr 240px;
+  overflow: hidden;
+}
+
+/* ── LEFT / RIGHT PANELS ── */
+.side-panel {
+  background: var(--panel);
+  border-color: var(--panelborder);
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+.side-panel.left  { border-right: 1px solid var(--panelborder); }
+.side-panel.right { border-left:  1px solid var(--panelborder); }
+
+.data-block {
+  border: 1px solid var(--red3);
+  padding: 8px 10px;
+  position: relative;
+}
+.data-block::before {
+  content: attr(data-label);
+  position: absolute; top: -6px; left: 8px;
+  font-size: 7px; letter-spacing: 2px; color: var(--red);
+  background: var(--panel); padding: 0 4px;
+  text-transform: uppercase;
+}
+.data-val {
+  font-size: 9px; color: #660000; line-height: 1.9; letter-spacing: .5px;
+}
+.data-val span { color: var(--text); }
+
+.circuit-lines {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+.circuit-lines svg { width: 100%; height: 100%; opacity: .25; }
+
+/* ── CENTER LOGIN PANEL ── */
+.center-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 40px;
+  position: relative;
+  background: #000;
+}
+.center-panel::before {
+  content: '';
+  position: absolute; inset: 20px;
+  border: 1px solid var(--red3);
+  pointer-events: none;
+  clip-path: polygon(
+    0 0, calc(100% - 18px) 0, 100% 18px,
+    100% 100%, 18px 100%, 0 calc(100% - 18px)
+  );
+}
+.center-panel::after {
+  content: '';
+  position: absolute;
+  top: 20px; right: 20px; width: 18px; height: 18px;
+  background: var(--red3);
+  clip-path: polygon(100% 0, 100% 100%, 0 0);
+  pointer-events: none;
+}
+
+.login-code {
+  font-family: var(--mono);
+  font-size: 9px; letter-spacing: 4px;
+  color: #440000; margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.login-title {
+  font-family: var(--cond);
+  font-size: 48px; font-weight: 900;
+  letter-spacing: 6px;
+  color: var(--amber);
+  text-transform: uppercase;
+  line-height: 1;
+  text-shadow: 0 0 30px rgba(255,153,0,.4), 0 0 4px rgba(255,153,0,.6);
+  margin-bottom: 4px;
+}
+.login-subtitle {
+  font-size: 8px; letter-spacing: 4px;
+  color: var(--red); text-transform: uppercase;
+  margin-bottom: 30px;
+}
+
+.login-box {
+  width: 100%; max-width: 380px;
+  border: 1px solid var(--panelborder);
+  background: var(--panel);
+  padding: 24px;
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+.login-box::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--red2), var(--amber2), var(--red2));
+}
+
+.err-msg {
+  background: rgba(204,0,0,.1);
+  border: 1px solid var(--red);
+  border-left: 3px solid var(--red);
+  color: var(--dim);
+  font-size: 9px;
+  letter-spacing: 2px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+
+.field-label {
+  font-size: 7px; letter-spacing: 4px;
+  color: var(--red); text-transform: uppercase;
+  margin-bottom: 7px; display: block;
+}
+input[type="password"] {
+  width: 100%;
+  background: #060000;
+  border: 1px solid #330000;
+  border-left: 2px solid var(--red);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 18px;
+  padding: 10px 14px;
+  outline: none;
+  letter-spacing: 6px;
+  margin-bottom: 18px;
+  transition: border-color .2s, box-shadow .2s;
+  caret-color: var(--amber);
+}
+input[type="password"]:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px rgba(204,0,0,.2), inset 0 0 10px rgba(204,0,0,.05);
+}
+input[type="password"]::placeholder {
+  color: #330000; letter-spacing: 4px; font-size: 14px;
+}
+
+button[type="submit"] {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-family: var(--cond);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  padding: 13px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  transition: color .2s, box-shadow .2s;
+}
+button[type="submit"]::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .25s ease;
+}
+button[type="submit"]:hover::before { transform: scaleX(1); }
+button[type="submit"]:hover {
+  color: #000;
+  box-shadow: 0 0 24px rgba(204,0,0,.4);
+}
+button[type="submit"] span { position: relative; z-index: 1; }
+
+.sys-info {
+  margin-top: 16px;
+  font-size: 8px; letter-spacing: 2px;
+  color: #440000; text-transform: uppercase;
+  display: flex; gap: 12px;
+}
+.sys-info span { color: var(--red); }
+
+/* ── MAGI BAR ── */
+.magi-bar {
+  background: var(--panel);
+  border-top: 1px solid var(--panelborder);
+  display: flex; align-items: center;
+  padding: 0 16px; gap: 8px;
+}
+.magi-label {
+  font-size: 8px; letter-spacing: 3px; color: var(--red2);
+  text-transform: uppercase; flex-shrink: 0;
+  padding-right: 12px; border-right: 1px solid var(--red3);
+}
+.magi-unit {
+  border: 1px solid var(--red3);
+  background: rgba(204,0,0,.08);
+  padding: 4px 10px;
+  font-family: var(--cond);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--red2);
+  text-transform: uppercase;
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
+  flex-shrink: 0;
+}
+.magi-spacer { flex: 1; }
+.magi-subjects {
+  display: flex; gap: 10px;
+}
+.magi-subject {
+  display: flex; flex-direction: column; align-items: flex-end;
+}
+.magi-subject-num {
+  font-family: var(--cond);
+  font-size: 14px; font-weight: 900;
+  color: var(--red2); letter-spacing: 1px; line-height: 1;
+}
+.magi-subject-label {
+  font-size: 6px; letter-spacing: 2px;
+  color: #440000; text-transform: uppercase;
+}
+.magi-caution {
+  display: flex; gap: 6px;
+  border-left: 1px solid var(--red3);
+  padding-left: 12px; margin-left: 4px;
+}
+.magi-caution span {
+  font-size: 6px; letter-spacing: 2px;
+  border: 1px solid #330000; color: #550000;
+  padding: 2px 5px; text-transform: uppercase;
+}
+
+/* ── BOTTOM INFO BAR ── */
+.bottom-bar {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-top: 1px solid var(--panelborder);
+  background: var(--panel);
+  position: relative;
+}
+.bottom-bar::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--red), var(--red2), transparent);
+}
+.bottom-label {
+  font-size: 7px; letter-spacing: 3px;
+  color: #440000; text-transform: uppercase;
+}
+.bottom-val {
+  font-size: 8px; letter-spacing: 2px;
+  color: var(--red2); text-transform: uppercase;
+}
+.pattern-indicator {
+  display: flex; align-items: center; gap: 8px;
+}
+.pattern-dot {
+  width: 8px; height: 8px;
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+  animation: pat-blink 1.5s steps(1) infinite;
+}
+@keyframes pat-blink { 0%,49%{opacity:1} 50%,100%{opacity:.1} }
+.pattern-text {
+  font-family: var(--cond);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 3px; color: var(--amber);
+  text-transform: uppercase;
+}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<div class="frame">
+
+  <!-- TOP INFO BAR -->
+  <div class="top-bar">
+    <div class="clock-wrap">
+      <div class="clock-label">現在時刻表示 · Active Time Display</div>
+      <div class="clock-display" id="clock">--:--:--</div>
+    </div>
+    <div class="top-center">
+      <div class="top-center-label">外部接続システム · External Link</div>
+      <div class="top-center-val">Music Tools Node ／ Auth Terminal</div>
+    </div>
+    <div class="top-right">
+      <div class="top-right-label">Psychographic Display</div>
+      <div class="top-right-val">Phase 4 &nbsp;·&nbsp; Node: music-tools &nbsp;·&nbsp; NERV HQ</div>
+    </div>
+  </div>
+
+  <!-- HAZARD BAND TOP -->
+  <div class="hazard-band"></div>
+
+  <!-- 非常事態 BAR TOP -->
+  <div class="jap-bar">
+    <div class="jap-text">非常事態</div>
+  </div>
+
+  <!-- MAIN AREA -->
+  <div class="main-area">
+
+    <!-- LEFT PANEL -->
+    <div class="side-panel left">
+      <div class="data-block" data-label="SECURITY-A">
+        <div class="data-val">
+          LINE 0 &nbsp;<span>████████</span><br>
+          LINE 1 &nbsp;<span>██████</span><br>
+          LINE 2 &nbsp;<span>████</span><br>
+          LINE 3 &nbsp;<span>██████████</span><br>
+          LINE 4 &nbsp;<span>████████</span>
+        </div>
+      </div>
+      <div class="data-block" data-label="NODE STATUS">
+        <div class="data-val">
+          CPU &nbsp;&nbsp;<span>0.03%</span><br>
+          MEM &nbsp;&nbsp;<span>128M</span><br>
+          NET &nbsp;&nbsp;<span>ONLINE</span><br>
+          AUTH &nbsp;<span>LOCKED</span>
+        </div>
+      </div>
+      <div class="circuit-lines">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#cc0000" stroke-width="1">
+          <line x1="10" y1="10" x2="10" y2="60"/><line x1="10" y1="60" x2="60" y2="60"/>
+          <line x1="60" y1="60" x2="60" y2="100"/><line x1="60" y1="100" x2="120" y2="100"/>
+          <line x1="120" y1="100" x2="120" y2="40"/><line x1="120" y1="40" x2="180" y2="40"/>
+          <line x1="180" y1="40" x2="180" y2="160"/><line x1="180" y1="160" x2="80" y2="160"/>
+          <line x1="80" y1="160" x2="80" y2="130"/><line x1="80" y1="130" x2="30" y2="130"/>
+          <line x1="30" y1="130" x2="30" y2="190"/>
+          <circle cx="10" cy="60" r="3" fill="#cc0000"/>
+          <circle cx="60" cy="60" r="3" fill="#cc0000"/>
+          <circle cx="60" cy="100" r="3" fill="#cc0000"/>
+          <circle cx="120" cy="100" r="3" fill="#cc0000"/>
+          <circle cx="120" cy="40" r="3" fill="#cc0000"/>
+          <circle cx="180" cy="40" r="3" fill="#cc0000"/>
+          <circle cx="80" cy="160" r="3" fill="#cc0000"/>
+          <circle cx="30" cy="130" r="3" fill="#cc0000"/>
+          <rect x="50" y="52" width="16" height="16" fill="rgba(204,0,0,.15)" stroke="#880000"/>
+          <rect x="110" y="92" width="20" height="16" fill="rgba(204,0,0,.1)" stroke="#660000"/>
+          <rect x="170" y="148" width="16" height="16" fill="rgba(204,0,0,.15)" stroke="#880000"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- CENTER LOGIN -->
+    <div class="center-panel">
+      <div class="login-code">Code: [CLASSIFIED] &nbsp;·&nbsp; Auth Level: NERV-1</div>
+      <div class="login-title">Emergency</div>
+      <div class="login-subtitle">Terminal Authentication Required &nbsp;·&nbsp; 認証システム</div>
+
+      <div class="login-box">
+        {% if error %}
+        <div class="err-msg">⚠ {{ error }}</div>
+        {% endif %}
+        <form method="post">
+          <label class="field-label">Access Key &nbsp;·&nbsp; アクセスキー</label>
+          <input type="password" name="password" autofocus placeholder="· · · · · · · ·">
+          <button type="submit"><span>▶ Authenticate</span></button>
+        </form>
+        <div class="sys-info">
+          <span>SYS: <span>ONLINE</span></span>
+          <span>MAGI: <span>READY</span></span>
+          <span>AT-FIELD: <span>ACTIVE</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="side-panel right">
+      <div class="data-block" data-label="FIELD-B">
+        <div class="data-val">
+          LINE 0 &nbsp;<span>██████</span><br>
+          LINE 1 &nbsp;<span>████████</span><br>
+          LINE 2 &nbsp;<span>██</span><br>
+          LINE 3 &nbsp;<span>████████</span><br>
+          LINE 4 &nbsp;<span>██████</span>
+        </div>
+      </div>
+      <div class="data-block" data-label="PATTERN">
+        <div class="data-val">
+          TYPE &nbsp;&nbsp;<span>BLUE</span><br>
+          SYNC &nbsp;&nbsp;<span>100%</span><br>
+          EVA &nbsp;&nbsp;<span>UNIT-01</span><br>
+          PILOT &nbsp;<span>3RD CHILD</span>
+        </div>
+      </div>
+      <div class="circuit-lines">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#cc0000" stroke-width="1">
+          <line x1="190" y1="10" x2="190" y2="80"/><line x1="190" y1="80" x2="130" y2="80"/>
+          <line x1="130" y1="80" x2="130" y2="120"/><line x1="130" y1="120" x2="70" y2="120"/>
+          <line x1="70" y1="120" x2="70" y2="60"/><line x1="70" y1="60" x2="20" y2="60"/>
+          <line x1="20" y1="60" x2="20" y2="170"/><line x1="20" y1="170" x2="100" y2="170"/>
+          <line x1="100" y1="170" x2="100" y2="140"/><line x1="100" y1="140" x2="170" y2="140"/>
+          <line x1="170" y1="140" x2="170" y2="190"/>
+          <circle cx="190" cy="80" r="3" fill="#cc0000"/>
+          <circle cx="130" cy="80" r="3" fill="#cc0000"/>
+          <circle cx="130" cy="120" r="3" fill="#cc0000"/>
+          <circle cx="70" cy="120" r="3" fill="#cc0000"/>
+          <circle cx="70" cy="60" r="3" fill="#cc0000"/>
+          <circle cx="20" cy="60" r="3" fill="#cc0000"/>
+          <circle cx="100" cy="170" r="3" fill="#cc0000"/>
+          <circle cx="100" cy="140" r="3" fill="#cc0000"/>
+          <rect x="120" y="72" width="20" height="16" fill="rgba(204,0,0,.15)" stroke="#880000"/>
+          <rect x="60" y="112" width="16" height="16" fill="rgba(204,0,0,.1)" stroke="#660000"/>
+          <rect x="12" y="152" width="16" height="24" fill="rgba(204,0,0,.15)" stroke="#880000"/>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 非常事態 BAR BOTTOM -->
+  <div class="jap-bar">
+    <div class="jap-text">非常事態</div>
+  </div>
+
+  <!-- HAZARD BAND BOTTOM -->
+  <div class="hazard-band"></div>
+
+  <!-- MAGI BAR -->
+  <div class="magi-bar">
+    <div class="magi-label">MAGI</div>
+    <div class="magi-unit">Casper&nbsp;&nbsp;3</div>
+    <div class="magi-unit">Magi</div>
+    <div class="magi-unit">Melchior&nbsp;&nbsp;1</div>
+    <div class="magi-spacer"></div>
+    <div class="magi-subjects">
+      <div class="magi-subject">
+        <div class="magi-subject-num">01</div>
+        <div class="magi-subject-label">Subject</div>
+      </div>
+      <div class="magi-subject">
+        <div class="magi-subject-num">02</div>
+        <div class="magi-subject-label">Subject</div>
+      </div>
+    </div>
+    <div class="magi-caution">
+      <span>Caution</span>
+      <span>Danger</span>
+    </div>
+  </div>
+
+  <!-- BOTTOM INFO BAR -->
+  <div class="bottom-bar">
+    <div class="bottom-label">Security Level: NERV-1 &nbsp;·&nbsp; All Access Restricted</div>
+    <div class="pattern-indicator">
+      <div class="pattern-dot"></div>
+      <div class="pattern-text">Pattern Blue &nbsp;·&nbsp; AT Field Active</div>
+    </div>
+    <div class="bottom-val">NERV HQ &nbsp;·&nbsp; Music Tools v2.0</div>
+  </div>
+
+</div>
+
+<script>
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent = h + ':' + m + ':' + s;
+}
+updateClock();
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>

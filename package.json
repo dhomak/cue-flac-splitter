@@ -1,0 +1,49 @@
+{
+  "name": "music-tools",
+  "version": "1.0.0",
+  "description": "Web GUI for music processing scripts",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "node server.js",
+    "electron": "electron .",
+    "build": "electron-builder --mac"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.musictools.app",
+    "productName": "Music Tools",
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.music",
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "icon": "build/icon.icns"
+    },
+    "files": [
+      "**/*",
+      "!.git/**",
+      "!*.sh",
+      "!*.pl",
+      "!*.py",
+      "!venv/**",
+      "!rutracker_magnets.txt",
+      "!python_venv_manual.txt"
+    ],
+    "extraResources": [
+      {
+        "from": ".",
+        "to": "scripts",
+        "filter": ["*.sh", "*.pl", "*.py", "!server.js"]
+      },
+      {
+        "from": "pylibs",
+        "to": "pylibs"
+      }
+    ]
+  }
+}
