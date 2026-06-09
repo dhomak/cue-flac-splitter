@@ -21,20 +21,39 @@ const SCRIPT_DIR = (() => {
   return __dirname;
 })();
 
-const VENV_PYTHON = (() => {
-  const candidates = [
+// Bundled vendor directory (ffmpeg/ffprobe binaries + Python)
+const ARCH = process.arch === 'arm64' ? 'arm64' : 'x64';
+
+const VENDOR_DIR = (() => {
+  if (process.resourcesPath) {
+    const p = path.join(process.resourcesPath, 'vendor');
+    if (fs.existsSync(p)) return p;
+  }
+  const p = path.join(__dirname, 'vendor');
+  return fs.existsSync(p) ? p : null;
+})();
+
+const BUNDLED_PYTHON = (() => {
+  if (VENDOR_DIR) {
+    const p = path.join(VENDOR_DIR, 'python', ARCH, 'bin', 'python3');
+    if (fs.existsSync(p)) return p;
+  }
+  // Dev fallbacks when vendor/ hasn't been set up yet
+  for (const p of [
     path.join(__dirname, 'venv', 'bin', 'python3'),
     '/opt/homebrew/bin/python3',
     '/usr/local/bin/python3',
-    'python3',
-  ];
-  return candidates.find(p => !p.startsWith('/') || fs.existsSync(p)) || 'python3';
+  ]) {
+    if (fs.existsSync(p)) return p;
+  }
+  return 'python3';
 })();
 
-// macOS GUI apps don't inherit shell PATH — inject Homebrew and standard tool paths
+// macOS GUI apps don't inherit shell PATH — inject bundled binaries and Homebrew paths
 const SPAWN_ENV = {
   ...process.env,
   PATH: [
+    VENDOR_DIR ? path.join(VENDOR_DIR, 'bin', ARCH) : null,
     '/opt/homebrew/bin',
     '/opt/homebrew/sbin',
     '/usr/local/bin',
@@ -43,7 +62,7 @@ const SPAWN_ENV = {
     '/usr/sbin',
     '/sbin',
     process.env.PATH || '',
-  ].join(':'),
+  ].filter(Boolean).join(':'),
 };
 
 // ── Job management ────────────────────────────────────────────────────────────
@@ -190,7 +209,7 @@ app.post('/api/cue-split', (req, res) => {
 app.post('/api/lyrics-fetch', (req, res) => {
   const { path: dir } = req.body;
   if (!dir) return res.status(400).json({ error: 'path required' });
-  const proc = spawn(VENV_PYTHON, ['-u', path.join(SCRIPT_DIR, 'audio_lyrics_fetcher.py'), dir], { env: SPAWN_ENV });
+  const proc = spawn(BUNDLED_PYTHON, ['-u', path.join(SCRIPT_DIR, 'audio_lyrics_fetcher.py'), dir], { env: SPAWN_ENV });
   res.json({ job_id: createJob(proc) });
 });
 
@@ -203,7 +222,7 @@ app.post('/api/rutracker', (req, res) => {
   const env = { ...SPAWN_ENV, PYTHONPATH: pyLibsDir };
   if (username) env.RT_USERNAME = username;
   if (password) env.RT_PASSWORD = password;
-  const proc = spawn(VENV_PYTHON, ['-u', path.join(SCRIPT_DIR, 'rutracker_scraper.py'), tempFile], { env });
+  const proc = spawn(BUNDLED_PYTHON, ['-u', path.join(SCRIPT_DIR, 'rutracker_scraper.py'), tempFile], { env });
   proc.on('close', () => { try { fs.unlinkSync(tempFile); } catch (_) {} });
   res.json({ job_id: createJob(proc) });
 });
