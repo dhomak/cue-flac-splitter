@@ -243,7 +243,7 @@ sub split_album_using_cue {
         push @planned_final,  $final_name;
 
         my @cmd = (
-            'ffmpeg','-hide_banner','-loglevel','error',
+            'ffmpeg','-hide_banner','-loglevel','error','-y',
             '-ss', sprintf('%.3f', $start_s),
             '-i',  os_encode($audio_path),
             '-t',  sprintf('%.3f', $seg_dur),
