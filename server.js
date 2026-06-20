@@ -243,6 +243,7 @@ app.post('/api/cue-convert', (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => console.log(`Music Tools running at http://localhost:${PORT}`));
 } else {
+  module.exports.app = app;
   module.exports.start = (callback) => {
     app.listen(PORT, () => {
       console.log(`Music Tools running at http://localhost:${PORT}`);
