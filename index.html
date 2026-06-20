@@ -1296,9 +1296,29 @@
               <button class="browse-btn" onclick="openBrowser('lyrics-path')">browse</button>
             </div>
           </div>
+          <div class="field">
+            <label class="field-label">Options</label>
+            <div class="toggle-group">
+              <label class="toggle-item">
+                <input type="checkbox" id="lyrics-overwrite">
+                <div class="toggle-track"></div>
+                <span class="toggle-label">Re-fetch even if .lrc/.txt exists (--overwrite)</span>
+              </label>
+            </div>
+          </div>
+          <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="field-label">Workers</label>
+              <input type="text" id="lyrics-workers" placeholder="6" style="text-align:center">
+            </div>
+            <div>
+              <label class="field-label">Delay (s)</label>
+              <input type="text" id="lyrics-delay" placeholder="0.3" style="text-align:center">
+            </div>
+          </div>
           <div style="font-size:10px;color:var(--mid);line-height:1.8;margin-bottom:22px;border-left:2px solid var(--border2);padding-left:12px">
-            Skips files that already have a .lrc or .txt alongside them.<br>
-            Prefers synced lyrics (LRC format) when available.
+            Sources: LRCLIB → ChartLyrics → lyrics.ovh<br>
+            Prefers synced lyrics (.lrc) when available.
           </div>
           <button class="run-btn" id="lyrics-run" onclick="runLyrics()">
             <span>▶ Fetch Lyrics</span>
@@ -1568,7 +1588,10 @@ async function runCue() {
 }
 async function runLyrics() {
   const path = document.getElementById('lyrics-path').value.trim();
-  const r = await fetch('/api/lyrics-fetch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path}) });
+  const overwrite = document.getElementById('lyrics-overwrite').checked;
+  const workers = parseInt(document.getElementById('lyrics-workers').value.trim(), 10) || 6;
+  const delay = parseFloat(document.getElementById('lyrics-delay').value.trim()) || 0.3;
+  const r = await fetch('/api/lyrics-fetch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path, overwrite, workers, delay}) });
   const d = await r.json(); if (d.error) { alert(d.error); return; }
   startStream(d.job_id, document.getElementById('lyrics-console'), document.getElementById('lyrics-status'), document.getElementById('lyrics-run'), document.getElementById('lyrics-stop'));
 }

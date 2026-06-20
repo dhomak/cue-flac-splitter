@@ -207,9 +207,13 @@ app.post('/api/cue-split', (req, res) => {
 });
 
 app.post('/api/lyrics-fetch', (req, res) => {
-  const { path: dir } = req.body;
+  const { path: dir, workers, delay, overwrite } = req.body;
   if (!dir) return res.status(400).json({ error: 'path required' });
-  const proc = spawn(BUNDLED_PYTHON, ['-u', path.join(SCRIPT_DIR, 'audio_lyrics_fetcher.py'), dir], { env: SPAWN_ENV });
+  const args = ['-u', path.join(SCRIPT_DIR, 'audio_lyrics_fetcher.py'), dir];
+  if (workers)   args.push('-w', String(parseInt(workers, 10) || 6));
+  if (delay != null) args.push('-d', String(parseFloat(delay) || 0.3));
+  if (overwrite) args.push('--overwrite');
+  const proc = spawn(BUNDLED_PYTHON, args, { env: SPAWN_ENV });
   res.json({ job_id: createJob(proc) });
 });
 
