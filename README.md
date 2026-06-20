@@ -109,7 +109,6 @@ python3 encoding_fixer.py /path/to/album --apply --backup --verbose
 ```
 split-cue-unicode.pl      # CUE splitter (Perl)
 flac_downsampler.sh       # FLAC downsampler (bash + ffmpeg)
-flac_to_cd.sh             # Recursive FLAC converter preserving directory structure
 audio_lyrics_fetcher.py   # Lyrics fetcher (Python)
 cue_converter.sh          # CUE encoding converter (bash + uchardet)
 encoding_fixer.py         # Mojibake repair tool (Python)
