@@ -74,7 +74,8 @@ def get_session():
 class LyricsFetcher:
     """Fetches lyrics from a prioritised list of sources."""
 
-    def __init__(self):
+    def __init__(self, prefer_txt=False):
+        self.prefer_txt = prefer_txt
         # (label, callable) in priority order
         self.sources = [
             ('LRCLIB', self._lrclib),
@@ -94,10 +95,12 @@ class LyricsFetcher:
             if data:
                 synced = data[0].get('syncedLyrics') or ''
                 plain = data[0].get('plainLyrics') or ''
-                if synced:
+                if synced and not self.prefer_txt:
                     return ('synced', synced)
                 if plain:
                     return ('plain', plain)
+                if synced:
+                    return ('synced', synced)
         return None
 
     def _chartlyrics(self, artist, title):
@@ -146,12 +149,12 @@ class LyricsFetcher:
 # Audio handling
 # ---------------------------------------------------------------------------
 class AudioParser:
-    def __init__(self, directory, workers=6, delay=0.3, overwrite=False):
+    def __init__(self, directory, workers=6, delay=0.3, overwrite=False, prefer_txt=False):
         self.directory = Path(directory).expanduser().resolve()
         self.workers = max(1, workers)
         self.delay = max(0.0, delay)
         self.overwrite = overwrite
-        self.fetcher = LyricsFetcher()
+        self.fetcher = LyricsFetcher(prefer_txt=prefer_txt)
 
     # -- metadata ----------------------------------------------------------
     @staticmethod
@@ -298,6 +301,8 @@ def main():
                         help='Per-worker pacing delay in seconds (default: 0.3)')
     parser.add_argument('--overwrite', action='store_true',
                         help='Re-fetch even if a .lrc/.txt already exists')
+    parser.add_argument('--prefer-txt', action='store_true',
+                        help='Save as plain .txt even when synced .lrc is available')
     args = parser.parse_args()
 
     print("🎼 Audio Lyrics Fetcher\n", flush=True)
@@ -306,6 +311,7 @@ def main():
         workers=args.workers,
         delay=args.delay,
         overwrite=args.overwrite,
+        prefer_txt=args.prefer_txt,
     ).run()
 
 

@@ -1314,6 +1314,11 @@
                 <div class="toggle-track"></div>
                 <span class="toggle-label">Re-fetch even if .lrc/.txt exists (--overwrite)</span>
               </label>
+              <label class="toggle-item">
+                <input type="checkbox" id="lyrics-prefertxt">
+                <div class="toggle-track"></div>
+                <span class="toggle-label">Prefer plain .txt over synced .lrc (--prefer-txt)</span>
+              </label>
             </div>
           </div>
           <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1660,9 +1665,10 @@ async function runCue() {
 async function runLyrics() {
   const path = document.getElementById('lyrics-path').value.trim();
   const overwrite = document.getElementById('lyrics-overwrite').checked;
+  const prefer_txt = document.getElementById('lyrics-prefertxt').checked;
   const workers = parseInt(document.getElementById('lyrics-workers').value.trim(), 10) || 6;
   const delay = parseFloat(document.getElementById('lyrics-delay').value.trim()) || 0.3;
-  const r = await fetch('/api/lyrics-fetch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path, overwrite, workers, delay}) });
+  const r = await fetch('/api/lyrics-fetch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path, overwrite, prefer_txt, workers, delay}) });
   const d = await r.json(); if (d.error) { alert(d.error); return; }
   startStream(d.job_id, document.getElementById('lyrics-console'), document.getElementById('lyrics-status'), document.getElementById('lyrics-run'), document.getElementById('lyrics-stop'));
 }
