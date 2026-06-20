@@ -58,6 +58,17 @@ MUSIC_ROOT=/Volumes/Music npm start
 
 ---
 
+## Install from DMG
+
+Mount the DMG, drag **Music Tools** to Applications, then clear the quarantine flag (required on unsigned builds):
+
+```bash
+xattr -cr /Applications/Music\ Tools.app
+open /Applications/Music\ Tools.app
+```
+
+---
+
 ## Build
 
 Produces signed or unsigned DMGs for both Apple Silicon and Intel:
