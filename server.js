@@ -238,24 +238,6 @@ app.post('/api/cue-convert', (req, res) => {
   res.json({ job_id: createJob(proc) });
 });
 
-// ── Auto-update ───────────────────────────────────────────────────────────────
-
-app.post('/api/update', (req, res) => {
-  const secret = process.env.UPDATE_SECRET;
-  if (!secret || req.body.secret !== secret) return res.status(403).json({ error: 'forbidden' });
-
-  res.json({ ok: true, message: 'Update started — server will restart' });
-
-  const { exec } = require('child_process');
-  exec('git pull && npm install --omit=dev', { cwd: __dirname }, (err, stdout, stderr) => {
-    if (stdout) console.log('[update]', stdout.trim());
-    if (stderr) console.error('[update]', stderr.trim());
-    if (err) { console.error('[update] failed:', err.message); return; }
-    console.log('[update] complete — restarting');
-    process.exit(0); // systemd/launchd will restart the service
-  });
-});
-
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 if (require.main === module) {
