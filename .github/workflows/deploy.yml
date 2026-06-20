@@ -1,0 +1,15 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger server update
+        run: |
+          curl -sf -X POST "${{ secrets.SERVER_URL }}/api/update" \
+            -H "Content-Type: application/json" \
+            -d "{\"secret\":\"${{ secrets.UPDATE_SECRET }}\"}"
