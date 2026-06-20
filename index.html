@@ -1140,6 +1140,16 @@
       </div>
       CUE Converter
     </div>
+    <div class="nav-item" data-panel="encfix">
+      <div class="nav-icon">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2 3.5 L8 3.5 M2 7 L8 7 M2 10.5 L5 10.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M10 5 L13 7 L10 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M13 7 L8 7" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        </svg>
+      </div>
+      Encoding Fixer
+    </div>
     <div class="nav-item" data-panel="rutracker">
       <div class="nav-icon">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -1375,6 +1385,64 @@
       </div>
     </div>
 
+    <!-- ── Encoding Fixer ── -->
+    <div class="tool-panel" id="panel-encfix">
+      <div class="tool-header">
+        <div class="tool-title-group">
+          <div class="tool-eyebrow">Encoding</div>
+          <div class="tool-title"><em>Encoding</em> Fixer</div>
+          <div class="tool-desc">Repair Windows-1251 mojibake in .cue/.txt/.log/.nfo/.m3u files and MP3 ID3 tags. Dry-run by default.</div>
+        </div>
+      </div>
+      <div class="tool-body">
+        <div class="form-col">
+          <div class="field">
+            <label class="field-label">Directory</label>
+            <div class="input-wrap">
+              <input type="text" id="encfix-path" placeholder="{{ music_root }}" style="padding-right:65px">
+              <button class="browse-btn" onclick="openBrowser('encfix-path')">browse</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label">Options</label>
+            <div class="toggle-group">
+              <label class="toggle-item">
+                <input type="checkbox" id="encfix-apply">
+                <div class="toggle-track"></div>
+                <span class="toggle-label">Apply changes (writes files) (--apply)</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" id="encfix-backup">
+                <div class="toggle-track"></div>
+                <span class="toggle-label">Keep .bak backups (--backup)</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" id="encfix-verbose">
+                <div class="toggle-track"></div>
+                <span class="toggle-label">Verbose (--verbose)</span>
+              </label>
+            </div>
+            <div class="warn" id="encfix-aw" style="display:none">
+              ⚠ Apply mode — files will be modified in place
+            </div>
+          </div>
+          <button class="run-btn" id="encfix-run" onclick="runEncodingFix()">
+            <span>▶ Run Encoding Fixer</span>
+          </button>
+        </div>
+        <div class="console-col">
+          <div class="console-header">
+            <div class="console-label">Output</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="stop-btn" id="encfix-stop" style="display:none" onclick="stopJob(this.dataset.jobId)">■ Stop</button>
+              <div class="status-badge" id="encfix-status">idle</div>
+            </div>
+          </div>
+          <div class="console-out" id="encfix-console"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── CUE Converter ── -->
     <div class="tool-panel" id="panel-cueconv">
       <div class="tool-header">
@@ -1527,6 +1595,9 @@ document.getElementById('flac-replace').addEventListener('change', function() {
 document.getElementById('cue-delete').addEventListener('change', function() {
   document.getElementById('cue-dw').style.display = this.checked ? 'flex' : 'none';
 });
+document.getElementById('encfix-apply').addEventListener('change', function() {
+  document.getElementById('encfix-aw').style.display = this.checked ? 'flex' : 'none';
+});
 
 /* ── Console rendering ── */
 function colorLine(line) {
@@ -1609,6 +1680,15 @@ async function runCueConv() {
   const r = await fetch('/api/cue-convert', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path}) });
   const d = await r.json(); if (d.error) { alert(d.error); return; }
   startStream(d.job_id, document.getElementById('cueconv-console'), document.getElementById('cueconv-status'), document.getElementById('cueconv-run'), document.getElementById('cueconv-stop'));
+}
+async function runEncodingFix() {
+  const path = document.getElementById('encfix-path').value.trim();
+  const apply = document.getElementById('encfix-apply').checked;
+  const backup = document.getElementById('encfix-backup').checked;
+  const verbose = document.getElementById('encfix-verbose').checked;
+  const r = await fetch('/api/encoding-fix', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path, apply, backup, verbose}) });
+  const d = await r.json(); if (d.error) { alert(d.error); return; }
+  startStream(d.job_id, document.getElementById('encfix-console'), document.getElementById('encfix-status'), document.getElementById('encfix-run'), document.getElementById('encfix-stop'));
 }
 
 /* ── Browser modal ── */

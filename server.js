@@ -238,6 +238,19 @@ app.post('/api/cue-convert', (req, res) => {
   res.json({ job_id: createJob(proc) });
 });
 
+app.post('/api/encoding-fix', (req, res) => {
+  const { path: dir, apply, backup, verbose } = req.body;
+  if (!dir) return res.status(400).json({ error: 'path required' });
+  const pyLibsDir = path.join(process.resourcesPath || __dirname, 'pylibs');
+  const env = { ...SPAWN_ENV, PYTHONPATH: pyLibsDir };
+  const args = ['-u', path.join(SCRIPT_DIR, 'encoding_fixer.py'), dir];
+  if (apply)   args.push('--apply');
+  if (backup)  args.push('--backup');
+  if (verbose) args.push('--verbose');
+  const proc = spawn(BUNDLED_PYTHON, args, { env });
+  res.json({ job_id: createJob(proc) });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 if (require.main === module) {
