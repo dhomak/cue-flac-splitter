@@ -9,3 +9,5 @@ __pycache__/
 build/Music Tools.app/
 dist/
 vendor/
+rutracker_magnets.txt
+python_venv_manual.txt
