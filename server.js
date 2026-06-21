@@ -232,13 +232,6 @@ app.post('/api/rutracker', (req, res) => {
   res.json({ job_id: createJob(proc) });
 });
 
-app.post('/api/cue-convert', (req, res) => {
-  const { path: dir } = req.body;
-  if (!dir) return res.status(400).json({ error: 'path required' });
-  const proc = spawn('bash', [path.join(SCRIPT_DIR, 'cue_converter.sh'), dir], { env: SPAWN_ENV });
-  res.json({ job_id: createJob(proc) });
-});
-
 app.post('/api/encoding-fix', (req, res) => {
   const { path: dir, apply, backup, verbose } = req.body;
   if (!dir) return res.status(400).json({ error: 'path required' });

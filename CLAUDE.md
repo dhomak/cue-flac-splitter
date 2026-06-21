@@ -1,183 +1,82 @@
-# CLAUDE.md
+# Music Tools — project guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Two parts that ship as one macOS app:
 
-## Overview
+1. **music-tools** — a Node/Express server (`server.js`) with a browser UI
+   (`index.html`, React-via-Babel) that shells out to media scripts and streams
+   their stdout back over SSE.
+2. **MusicToolsApp/** — a native **arm64-only** Swift/WKWebView shell that
+   launches the Node server and shows the UI in a real app window (replaces an
+   earlier Electron build to drop the bundled Chromium).
 
-This repository contains audio processing utilities for FLAC/CUE file handling, primarily focused on:
-- Splitting single-file FLAC albums using CUE sheets
-- Converting FLAC files to CD-quality (44.1kHz/16-bit)
-- Fetching lyrics for audio files
-- Converting CUE file encodings
+## Architecture
 
-All scripts are designed for macOS with Unicode/NFD filename support.
+- `server.js` (Express): serves `index.html` **fresh on every request** (so UI
+  edits show on reload, no rebuild). Endpoints under `/api/*` spawn the scripts
+  and register SSE jobs (`/stream/:jobId`). Reads `PORT` and `MUSIC_ROOT` from
+  env. Resolves bundled tools via `process.resourcesPath || __dirname` →
+  `vendor/`. Directory browsing is server-side via `/api/browse`.
+- Swift wrapper (`MusicToolsApp/Sources/MusicTools/`):
+  - `ServerController.swift` launches `node server.js`, **detects the port from
+    node's stdout** (`http://localhost:<port>`) and health-checks it, then tears
+    the process down (SIGTERM→SIGKILL) on quit.
+  - `AppDelegate.swift` hosts the `WKWebView`, shows a splash until ready, and
+    bridges a **native folder picker**.
+  - `BundlePaths.swift` resolves `vendor/node`, `server.js`, logs.
+- Tools: `audio_lyrics_fetcher.py`, `encoding_fixer.py` (also handles `.cue`
+  → UTF-8 via charset_normalizer), `split-cue-unicode.pl`, `flac_downsampler.sh`.
 
-## Core Scripts
+## Conventions / decisions (don't regress these)
 
-### split-cue-unicode.pl
-Main Perl script for splitting FLAC+CUE albums into individual tracks.
+- **arm64 only, no Rosetta.** All bundled runtimes (node, python, ffmpeg) are
+  arm64. The app is not meant to run on Intel.
+- `server.js` must use `const PORT = process.env.PORT || 3000;` so the wrapper
+  can assign a free port. Do not enable the Flask/Express reloader.
+- `index.html` is served live — reload to test UI changes; only rebuild the
+  `.app` for Swift changes.
+- **Removed features (keep removed):** the "CUE Converter" tool (UI nav, panel,
+  `runCueConv`, the `/api/cue-convert` route, and `cue_converter*.sh`) — `.cue`
+  conversion now lives in `encoding_fixer.py`. The "Logout" button (it led to a
+  dead `/login` page). The CUE **Splitter** is a different tool — keep it.
+- Native folder picker: JS posts
+  `window.webkit.messageHandlers.musicTools.postMessage({action:'pickFolder', target:<inputId>})`;
+  Swift opens `NSOpenPanel` and writes the path back. Falls back to the in-page
+  `/api/browse` modal in a plain browser.
 
-**Usage:**
-```bash
-./split-cue-unicode.pl [--delete] [--dry-run] [--to-root] [--overwrite-final] [ROOT]
+## Build / package (run from the music-tools repo root)
+
+```sh
+# Beta on this machine (uses system node + Homebrew ffmpeg)
+./MusicToolsApp/scripts/build_app.sh .
+
+# Self-contained arm64 distributable (bundles node + python + ffmpeg)
+./MusicToolsApp/scripts/build_dist.sh .
+
+# Drag-to-Applications DMG (run after build_dist.sh)
+./MusicToolsApp/scripts/package_dmg.sh
 ```
 
-**Key flags:**
-- `--delete`: Remove .flac and .cue after successful split
-- `--dry-run`: Preview changes without executing
-- `--to-root`: Place final files in album directory (default: ./split/)
-- `--overwrite-final`: Overwrite existing files when moving
+Signing/notarization knobs (env vars on the dist + dmg scripts):
+`DEV_ID="Developer ID Application: NAME (TEAMID)"`, `NOTARY_PROFILE=<profile>`.
+Full order in `MusicToolsApp/DISTRIBUTION.md`. Icon source defaults to
+`/Users/aalien/sandbox/split-cue/build/icon.icns` (override with `ICON_SRC=`).
 
-**Architecture notes:**
-- Uses ffmpeg/ffprobe for audio processing
-- Handles multiple encodings (UTF-8, cp1251, latin1) for CUE files
-- macOS NFD normalization for filesystem compatibility
-- Stages files in temporary directory (.split.tmp-<pid>) when using --to-root, then atomically moves them
-- Only deletes originals if ALL tracks succeed (planned_n == succeeded_n)
-- Default: re-encodes FLAC at compression level 8 ($REENCODE=1)
+## Bundle layout (distributable)
 
-**CUE parsing:**
-- Extracts PERFORMER, TITLE, FILE, TRACK, INDEX entries
-- Supports REM fields (DATE, GENRE)
-- Uses INDEX 01 for track start (falls back to INDEX 00)
-- Calculates track duration from next track's INDEX or total file duration
-
-### flac_downsampler.sh
-Converts FLAC files to CD-quality format with high-quality resampling.
-
-**Usage:**
-```bash
-./flac_downsampler.sh [input_directory] [output_directory]
+```
+MusicTools.app/Contents/Resources/server/
+  server.js  index.html  public/  <scripts>  node_modules/   (express only)
+  vendor/
+    node/bin/node                arm64 Node
+    python/arm64/bin/python3     relocatable Python + mutagen/requests/charset-normalizer
+    bin/arm64/ffmpeg, ffprobe    static arm64 (fetched via ffmpeg-ffprobe-static)
 ```
 
-**Defaults:**
-- Input: current directory
-- Output: ./downsampled/
+## Gotchas
 
-**Technical details:**
-- Uses SoXR resampler (precision=28, Chebyshev filter)
-- Target: 44.1kHz, 16-bit signed
-- FLAC compression level 8
-- Flattens directory structure (all files go to single output directory)
-
-### flac_to_cd.sh
-Recursive FLAC converter with directory structure preservation.
-
-**Usage:**
-```bash
-./flac_to_cd.sh INPUT_DIR OUTPUT_DIR
-```
-
-**Features:**
-- Preserves directory structure in output
-- Skips already-converted files (16-bit/44.1kHz)
-- Timestamp preservation (touch -r)
-- Prevents OUTDIR inside INDIR
-- Handles symlinks and whitespace via file_realpath()
-
-**Debug mode:**
-```bash
-DEBUG=1 ./flac_to_cd.sh INPUT_DIR OUTPUT_DIR
-```
-
-### audio_lyrics_fetcher.py
-Fetches lyrics for FLAC, MP3, and M4A/ALAC files.
-
-**Usage:**
-```bash
-python3 audio_lyrics_fetcher.py <directory>
-```
-
-**Requirements:**
-```bash
-pip install mutagen requests
-```
-
-**API sources (priority order):**
-1. LRCLIB (lrclib.net)
-2. ChartLyrics
-3. lyrics.ovh
-
-**Behavior:**
-- Skips files with existing .txt lyrics
-- Extracts artist/title from file metadata
-- 2-second delay between API requests
-- Saves lyrics as .txt files alongside audio files
-
-### cue_converter.sh
-Converts CUE files from WINDOWS-1251 to UTF-8.
-
-**Usage:**
-```bash
-./cue_converter.sh [directory]
-```
-
-**Operations:**
-- Converts WINDOWS-1251 → UTF-8
-- Removes carriage returns (\r)
-- Strips BOM (Byte Order Mark)
-
-## Dependencies
-
-**Required:**
-- ffmpeg (with SoXR support for flac_downsampler.sh)
-- ffprobe
-- perl (for split-cue-unicode.pl)
-- iconv (for cue_converter.sh)
-- Python 3 with mutagen + requests (for audio_lyrics_fetcher.py)
-
-**Installation (macOS):**
-```bash
-brew install ffmpeg perl python3
-pip3 install mutagen requests
-```
-
-## File Organization
-
-**Default behavior:**
-- `split-cue-unicode.pl`: Creates ./split/ subdirectory (unless --to-root)
-- `flac_downsampler.sh`: Creates ./downsampled/
-- `flac_to_cd.sh`: Uses specified OUTPUT_DIR
-- `audio_lyrics_fetcher.py`: Writes .txt files alongside audio files
-
-**Ignored directories:**
-- split/ (output directory)
-- venv/ (Python virtual environment)
-- __pycache__/
-
-## Common Workflows
-
-**Split album and place tracks in root directory:**
-```bash
-./split-cue-unicode.pl --to-root /path/to/album
-```
-
-**Split and clean up originals:**
-```bash
-# Preview first
-./split-cue-unicode.pl --to-root --delete --dry-run /path/to/album
-# Execute
-./split-cue-unicode.pl --to-root --delete /path/to/album
-```
-
-**Downsample high-res FLAC to CD quality:**
-```bash
-./flac_downsampler.sh /path/to/hires /path/to/output
-```
-
-**Convert entire music library preserving structure:**
-```bash
-./flac_to_cd.sh /Volumes/Music/FLAC /Volumes/Music/CD_Quality
-```
-
-**Fetch lyrics for album:**
-```bash
-python3 audio_lyrics_fetcher.py /path/to/album
-```
-
-## Unicode and macOS Considerations
-
-- All scripts handle UTF-8, including macOS NFD (decomposed) filenames
-- `split-cue-unicode.pl` includes os_norm() and os_encode() helpers for macOS compatibility
-- CUE files may be in various encodings (UTF-8, cp1251, latin1) - the Perl script auto-detects
-- Use `cue_converter.sh` to normalize CUE files to UTF-8 before processing
+- A Finder-launched `.app` gets a minimal `PATH`; node/ffmpeg/python are found
+  via the env `server.js` builds (`SPAWN_ENV`) and the wrapper's `PATH` for node.
+- macOS caches app icons — re-launch or `killall Dock` after an icon change.
+- For notarization, every Mach-O in `vendor/` must be signed inside-out; a
+  rejection is almost always one unsigned nested binary.
+- ffmpeg static builds are GPL/LGPL — fine for family, note it for public use.

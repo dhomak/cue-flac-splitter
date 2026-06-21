@@ -11,3 +11,6 @@ dist/
 vendor/
 rutracker_magnets.txt
 python_venv_manual.txt
+MusicToolsApp/.build/
+MusicToolsApp/*.xcodeproj/
+MusicToolsApp/build/
