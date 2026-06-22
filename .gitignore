@@ -14,3 +14,6 @@ python_venv_manual.txt
 MusicToolsApp/.build/
 MusicToolsApp/*.xcodeproj/
 MusicToolsApp/build/
+MusicToolsNative/.build/
+MusicToolsNative/*.xcodeproj/
+MusicToolsNative/build/
