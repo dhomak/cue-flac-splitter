@@ -72,6 +72,38 @@ PYBIN="$VENDOR/python/$VARCH/bin/python3"
 "$PYBIN" -m pip install --quiet --upgrade pip
 "$PYBIN" -m pip install --quiet $PY_LIBS
 
+# ── 6b. Prune Python to runtime-only (saves ~30 MB uncompressed) ─────────────
+echo "==> pruning Python (stdlib bloat, Tcl/Tk, pip, setuptools)"
+PYLIB="$VENDOR/python/$VARCH/lib"
+PYVER="$(ls "$PYLIB" | grep 'python3\.' | head -1)"   # e.g. python3.10
+
+# stdlib modules never needed at runtime
+for d in idlelib tkinter lib2to3 distutils ensurepip pydoc_data test unittest; do
+  rm -rf "$PYLIB/$PYVER/$d"
+done
+
+# Tcl/Tk dylibs and support dirs
+for item in libtcl9.0.dylib libtcl9tk9.0.dylib tcl9.0 tk9.0 itcl4.3.5 tcl9 thread3.0.4; do
+  rm -rf "$PYLIB/$item"
+done
+
+# pip and setuptools not needed post-install
+rm -rf "$PYLIB/$PYVER/site-packages/pip" \
+       "$PYLIB/$PYVER/site-packages/pip-"*.dist-info \
+       "$PYLIB/$PYVER/site-packages/setuptools" \
+       "$PYLIB/$PYVER/site-packages/setuptools-"*.dist-info \
+       "$PYLIB/$PYVER/site-packages/_distutils_hack" \
+       "$PYLIB/$PYVER/site-packages/distutils-precedence.pth"
+
+# Unused bin entries (keep python, python3, python3.x only)
+for b in idle3 idle3.10 2to3 2to3-3.10 pip3 pip3.10 pydoc3 pydoc3.10 \
+          python3-config python3.10-config; do
+  rm -f "$VENDOR/python/$VARCH/bin/$b"
+done
+
+# Bytecode caches (not needed; Python regenerates on first import)
+find "$VENDOR/python/$VARCH" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+
 # ── 7. Static arm64 ffmpeg + ffprobe (via npm, host-arch builds) ─────────────
 echo "==> bundling static arm64 ffmpeg + ffprobe"
 FFTMP="$WORK/fftmp"; rm -rf "$FFTMP"; mkdir -p "$FFTMP"
