@@ -40,13 +40,27 @@ if   [ -d "$SRC/pylibs" ];  then cp -R "$SRC/pylibs"  "$RES/pylibs"
 elif [ -d "$REPO/pylibs" ]; then cp -R "$REPO/pylibs" "$RES/pylibs"; fi
 
 echo "==> relocatable python (aarch64) + $PY_LIBS"
-PB_URL="$(curl -fsSL https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest \
-  | grep browser_download_url | grep "${PB_ARCH}-apple-darwin-install_only.tar.gz\"" | head -1 | cut -d'"' -f4)"
-[ -n "$PB_URL" ] || { echo "error: no python-build-standalone asset"; exit 1; }
-curl -fsSL "$PB_URL" -o "$WORK/py.tar.gz"; rm -rf "$WORK/python"; tar -xzf "$WORK/py.tar.gz" -C "$WORK"
+if [ ! -s "$WORK/py.tar.gz" ]; then
+  PB_URL="$(curl -fsSL https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest \
+    | grep browser_download_url | grep "${PB_ARCH}-apple-darwin-install_only.tar.gz\"" | head -1 | cut -d'"' -f4)"
+  [ -n "$PB_URL" ] || { echo "error: no python-build-standalone asset"; exit 1; }
+  curl -fsSL "$PB_URL" -o "$WORK/py.tar.gz"
+else
+  echo "    (using cached py.tar.gz)"
+fi
+rm -rf "$WORK/python"; tar -xzf "$WORK/py.tar.gz" -C "$WORK"
 cp -R "$WORK/python/." "$VENDOR/python/$VARCH/"
-"$VENDOR/python/$VARCH/bin/python3" -m pip install --quiet --upgrade pip
-"$VENDOR/python/$VARCH/bin/python3" -m pip install --quiet $PY_LIBS
+PYROOT="$VENDOR/python/$VARCH"
+"$PYROOT/bin/python3" -m pip install --quiet --upgrade pip
+"$PYROOT/bin/python3" -m pip install --quiet $PY_LIBS
+echo "==> pruning python"
+for d in test idlelib tkinter turtledemo lib2to3 ensurepip; do
+  rm -rf "$PYROOT"/lib/python*/"$d"
+done
+rm -f "$PYROOT"/lib/python*/turtle.py
+find "$PYROOT" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+find "$PYROOT" -type f -name '*.pyc' -delete 2>/dev/null || true
+echo "    python now $(du -sh "$PYROOT" | cut -f1)"
 
 echo "==> static arm64 ffmpeg + ffprobe"
 FFT="$WORK/fftmp"; rm -rf "$FFT"; mkdir -p "$FFT"

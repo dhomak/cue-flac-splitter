@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 /// Native folder picker.
 func chooseDirectory(start: String) -> String? {
@@ -16,6 +17,7 @@ func chooseDirectory(start: String) -> String? {
     return panel.runModal() == .OK ? panel.url?.path : nil
 }
 
+/// Directory field with a Browse button and folder drag-and-drop.
 struct PathField: View {
     let label: String
     @Binding var text: String
@@ -25,11 +27,23 @@ struct PathField: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             HStack {
-                TextField("/path/to/folder", text: $text).textFieldStyle(.roundedBorder)
+                TextField("/path/to/folder  (or drop a folder here)", text: $text)
+                    .textFieldStyle(.roundedBorder)
                 Button("Browse…") {
                     if let p = chooseDirectory(start: text) { text = p }
                 }
             }
+        }
+        .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
+            guard let provider = providers.first else { return false }
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                var path: String?
+                if let data = item as? Data,
+                   let url = URL(dataRepresentation: data, relativeTo: nil) { path = url.path }
+                else if let url = item as? URL { path = url.path }
+                if let p = path { DispatchQueue.main.async { text = p } }
+            }
+            return true
         }
     }
 }
@@ -83,13 +97,14 @@ struct ConsoleView: View {
     }
 }
 
-/// Shared panel chrome: title + tool-specific controls + run/stop/clear + console.
+/// Shared panel chrome: title + tool controls + (optional) progress + actions + console.
 struct ToolScaffold<Controls: View>: View {
     let title: String
     let subtitle: String
     @ObservedObject var runner: ToolRunner
     let canRun: Bool
     let onRun: () -> Void
+    var revealPath: String? = nil
     @ViewBuilder var controls: () -> Controls
 
     var body: some View {
@@ -99,6 +114,7 @@ struct ToolScaffold<Controls: View>: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 10) { controls() }
+
             HStack(spacing: 10) {
                 Button(action: onRun) { Label("Run", systemImage: "play.fill") }
                     .keyboardShortcut(.return, modifiers: [.command])
@@ -107,9 +123,20 @@ struct ToolScaffold<Controls: View>: View {
                     .disabled(!runner.isRunning)
                 Button(action: runner.clear) { Label("Clear", systemImage: "trash") }
                     .disabled(runner.isRunning || runner.lines.isEmpty)
+                if let rp = revealPath, !rp.isEmpty, !runner.isRunning,
+                   FileManager.default.fileExists(atPath: rp) {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: rp)])
+                    } label: { Label("Reveal", systemImage: "folder") }
+                }
                 Spacer()
                 StatusBadge(runner: runner)
             }
+
+            if let p = runner.progress {
+                ProgressView(value: p).tint(Theme.accent)
+            }
+
             ConsoleView(runner: runner)
         }
         .padding(20)

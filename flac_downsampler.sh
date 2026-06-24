@@ -121,23 +121,36 @@ downsample_file() {
         actual_output="${temp_dir}/.${temp_name}_tmp.flac"
     fi
     
-    # FFmpeg command with high-quality downsampling
-    # Capture stderr to check for errors
+    # FFmpeg downsample with live progress.
+    # -nostdin: never block reading stdin (matters when run from a GUI/subprocess).
+    # -progress pipe:1: emit machine-readable progress, which we turn into
+    # __PROGRESS__ <pct> lines for the app's progress bar; real errors go to stderr.
     local ffmpeg_output=$(mktemp)
-    # Try with SoXR first, fall back to simpler resampling if it fails
-    if ! ffmpeg -i "$input_file" \
+    local dur
+    dur=$(ffprobe -v error -show_entries format=duration \
+          -of default=noprint_wrappers=1:nokey=1 "$input_file" 2>/dev/null)
+    ffmpeg -nostdin -hide_banner -loglevel error \
+           -i "$input_file" \
            -ar 44100 \
            -sample_fmt s16 \
            -compression_level 8 \
            -y \
-           "$actual_output" 2>"$ffmpeg_output"; then
+           -progress pipe:1 \
+           "$actual_output" 2>"$ffmpeg_output" | \
+    while IFS='=' read -r key val; do
+        if [ "$key" = "out_time_us" ] && [ -n "$dur" ] && [ "$dur" != "N/A" ]; then
+            awk -v v="$val" -v d="$dur" 'BEGIN{ if (d+0>0) printf "__PROGRESS__ %d\n", (v/1000000.0)/d*100 }'
+        fi
+    done
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
         print_error "FFmpeg failed. Last error:"
         tail -5 "$ffmpeg_output" | grep -i "error\|task" || tail -3 "$ffmpeg_output"
-        rm "$ffmpeg_output"
-        [ -f "$actual_output" ] && rm "$actual_output"
+        rm -f "$ffmpeg_output"
+        [ -f "$actual_output" ] && rm -f "$actual_output"
         return 1
     fi
-    rm "$ffmpeg_output"
+    rm -f "$ffmpeg_output"
+    echo "__PROGRESS__ 100"
     
     if ! [ -f "$actual_output" ]; then
         print_error "Output file was not created"

@@ -1,7 +1,18 @@
 import SwiftUI
+import AppKit
+
+/// Kills any still-running job process groups when the app quits, so a
+/// cancelled/closed app never leaves an orphaned ffmpeg behind.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillTerminate(_ notification: Notification) {
+        JobRegistry.killAll()
+    }
+}
 
 @main
 struct MusicToolsApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             ContentView()

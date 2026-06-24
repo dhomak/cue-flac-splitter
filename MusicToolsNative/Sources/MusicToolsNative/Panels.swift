@@ -3,14 +3,14 @@ import SwiftUI
 // MARK: - FLAC Downsampler  (flac_downsampler.sh)
 struct FlacPanel: View {
     @StateObject private var r = ToolRunner()
-    @State private var path = ""
-    @State private var output = ""
-    @State private var replace = false
+    @AppStorage("flac.path") private var path = ""
+    @AppStorage("flac.output") private var output = ""
+    @State private var replace = false   // destructive — never persisted
 
     var body: some View {
         ToolScaffold(title: "FLAC Downsampler",
                      subtitle: "Convert FLAC to 44.1 kHz / 16-bit",
-                     runner: r, canRun: !path.isEmpty, onRun: run) {
+                     runner: r, canRun: !path.isEmpty, onRun: run, revealPath: path) {
             PathField("Directory", text: $path)
             Toggle("Replace originals (destructive)", isOn: $replace)
             if !replace { PathField("Output directory (optional)", text: $output) }
@@ -29,7 +29,7 @@ struct FlacPanel: View {
 // MARK: - CUE Splitter  (split-cue-unicode.pl)
 struct CueSplitPanel: View {
     @StateObject private var r = ToolRunner()
-    @State private var path = ""
+    @AppStorage("cue.path") private var path = ""
     @State private var toRoot = true
     @State private var deleteOrig = false
     @State private var overwrite = false
@@ -38,7 +38,7 @@ struct CueSplitPanel: View {
     var body: some View {
         ToolScaffold(title: "CUE Splitter",
                      subtitle: "Split CUE + FLAC albums into per-track files",
-                     runner: r, canRun: !path.isEmpty, onRun: run) {
+                     runner: r, canRun: !path.isEmpty, onRun: run, revealPath: path) {
             PathField("Directory", text: $path)
             Toggle("Place tracks in album folder (--to-root)", isOn: $toRoot)
             Toggle("Delete originals after full success", isOn: $deleteOrig)
@@ -60,7 +60,7 @@ struct CueSplitPanel: View {
 // MARK: - Lyrics Fetcher  (audio_lyrics_fetcher.py)
 struct LyricsPanel: View {
     @StateObject private var r = ToolRunner()
-    @State private var path = ""
+    @AppStorage("lyrics.path") private var path = ""
     @State private var workers = 6.0
     @State private var delay = 0.3
     @State private var overwrite = false
@@ -69,7 +69,7 @@ struct LyricsPanel: View {
     var body: some View {
         ToolScaffold(title: "Lyrics Fetcher",
                      subtitle: "Fetch .lrc / .txt from LRCLIB, ChartLyrics, lyrics.ovh",
-                     runner: r, canRun: !path.isEmpty, onRun: run) {
+                     runner: r, canRun: !path.isEmpty, onRun: run, revealPath: path) {
             PathField("Directory", text: $path)
             Stepper("Workers: \(Int(workers))", value: $workers, in: 1...16)
             HStack {
@@ -92,7 +92,7 @@ struct LyricsPanel: View {
 // MARK: - Encoding Fixer  (encoding_fixer.py)
 struct EncodingPanel: View {
     @StateObject private var r = ToolRunner()
-    @State private var path = ""
+    @AppStorage("encoding.path") private var path = ""
     @State private var apply = false
     @State private var backup = false
     @State private var verbose = false
@@ -100,7 +100,7 @@ struct EncodingPanel: View {
     var body: some View {
         ToolScaffold(title: "Encoding Fixer",
                      subtitle: "Repair Windows-1251 mojibake in tags / .cue / sidecar text",
-                     runner: r, canRun: !path.isEmpty, onRun: run) {
+                     runner: r, canRun: !path.isEmpty, onRun: run, revealPath: path) {
             PathField("Directory", text: $path)
             Toggle("Apply changes (off = dry-run preview)", isOn: $apply)
             Toggle("Write .bak backups", isOn: $backup).disabled(!apply)
