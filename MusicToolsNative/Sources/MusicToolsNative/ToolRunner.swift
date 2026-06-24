@@ -24,6 +24,14 @@ final class LineBuffer: @unchecked Sendable {
     func drain() -> String { lock.lock(); let s = text; text = ""; lock.unlock(); return s }
 }
 
+/// Thread-safe latest-progress holder (0...1), set off-actor, read on main.
+final class ProgressBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Double?
+    func set(_ v: Double) { lock.lock(); value = v; lock.unlock() }
+    func take() -> Double? { lock.lock(); let v = value; value = nil; lock.unlock(); return v }
+}
+
 /// Runs one script as a subprocess and streams its output. Each job runs in its
 /// OWN process group, so cancelling kills the script *and* its children (e.g. a
 /// running ffmpeg) instead of orphaning them. Console updates are coalesced on a
@@ -38,8 +46,10 @@ final class ToolRunner: ObservableObject {
     private var pid: pid_t = -1
     private var readFH: FileHandle?
     private var flushTimer: Timer?
+    private var nativeTask: Task<Void, Never>?
 
     private let buffer = LineBuffer()        // raw pipe bytes, thread-safe
+    private let progressBox = ProgressBox()  // latest native-job progress
     private var lineBuf = ""                 // partial-line assembly (main only)
     private let maxLines = 5000
 
@@ -67,11 +77,7 @@ final class ToolRunner: ObservableObject {
             buffer.append(String(decoding: d, as: UTF8.self))
         }
 
-        let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.flush() }
-        }
-        RunLoop.main.add(t, forMode: .common)
-        flushTimer = t
+        startFlushTimer()
 
         let childPid = pid
         DispatchQueue.global().async { [weak self] in
@@ -83,7 +89,26 @@ final class ToolRunner: ObservableObject {
         }
     }
 
+    /// Run a native in-process job (no subprocess). `op` streams log lines via
+    /// `emit` and 0...1 progress via `progress`, returning an exit code.
+    func runNative(_ op: @escaping @Sendable (_ emit: @escaping @Sendable (String) -> Void,
+                                              _ progress: @escaping @Sendable (Double) -> Void) async -> Int32) {
+        guard !isRunning else { return }
+        lines.removeAll(); _ = buffer.drain(); _ = progressBox.take(); lineBuf = ""
+        exitCode = nil; progress = nil; isRunning = true
+        startFlushTimer()
+
+        let emit: @Sendable (String) -> Void = { [buffer] s in buffer.append(s + "\n") }
+        let prog: @Sendable (Double) -> Void = { [progressBox] p in progressBox.set(p) }
+
+        nativeTask = Task.detached { [weak self] in
+            let code = await op(emit, prog)
+            await MainActor.run { self?.finishNative(code: code) }
+        }
+    }
+
     func cancel() {
+        nativeTask?.cancel()
         guard pid > 0 else { return }
         let group = pid
         kill(-group, SIGTERM)
@@ -93,6 +118,23 @@ final class ToolRunner: ObservableObject {
     func clear() { lines.removeAll(); exitCode = nil; progress = nil }
 
     // MARK: - private
+
+    private func startFlushTimer() {
+        let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.flush() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        flushTimer = t
+    }
+
+    private func finishNative(code: Int32) {
+        flush()
+        flushTimer?.invalidate(); flushTimer = nil
+        nativeTask = nil
+        isRunning = false
+        exitCode = code
+        if progress != nil, code == 0 { progress = 1.0 }
+    }
 
     private func finish(code: Int32, onFinish: (() -> Void)?) {
         flush()
@@ -107,6 +149,7 @@ final class ToolRunner: ObservableObject {
     }
 
     private func flush() {
+        if let p = progressBox.take() { progress = min(max(p, 0), 1) }
         let chunk = buffer.drain()
         guard !chunk.isEmpty else { return }
         lineBuf += chunk

@@ -57,7 +57,7 @@ struct CueSplitPanel: View {
     }
 }
 
-// MARK: - Lyrics Fetcher  (audio_lyrics_fetcher.py)
+// MARK: - Lyrics Fetcher  (native — LyricsFetcher.swift)
 struct LyricsPanel: View {
     @StateObject private var r = ToolRunner()
     @AppStorage("lyrics.path") private var path = ""
@@ -82,10 +82,12 @@ struct LyricsPanel: View {
     }
 
     private func run() {
-        var args = [path, "-w", String(Int(workers)), "-d", String(format: "%.2f", delay)]
-        if overwrite { args.append("--overwrite") }
-        if preferTxt { args.append("--prefer-txt") }
-        r.run(Paths.shared.python(script: "audio_lyrics_fetcher.py", args: args))
+        let opt = LyricsOptions(workers: Int(workers), delay: delay,
+                                overwrite: overwrite, preferTxt: preferTxt)
+        let dir = path
+        r.runNative { emit, progress in
+            await LyricsFetcher.run(directory: dir, options: opt, emit: emit, progress: progress)
+        }
     }
 }
 

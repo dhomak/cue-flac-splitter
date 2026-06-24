@@ -1,8 +1,8 @@
 # Music Tools — native (pure Swift)
 
-A SwiftUI macOS app that runs the five media scripts directly — no Node, no
-Express, no WKWebView, no `server.js`/`index.html`. The app *is* the UI and
-spawns each script as a subprocess, streaming its output into a native console.
+A SwiftUI macOS app — no Node, no Express, no WKWebView. The app *is* the UI:
+it spawns media scripts as subprocesses *or* runs tools natively in-process,
+streaming all output into a native console.
 
 Layout mirrors the old web UI: a sidebar of tools → a panel with that tool's
 options as native controls → a live console.
@@ -13,11 +13,13 @@ options as native controls → a live console.
 |------------------|--------------------------|---------|
 | FLAC Downsampler | flac_downsampler.sh      | bash    |
 | CUE Splitter     | split-cue-unicode.pl     | perl    |
-| Lyrics Fetcher   | audio_lyrics_fetcher.py  | python  |
+| Lyrics Fetcher   | native (LyricsFetcher.swift) | Swift   |
 | Encoding Fixer   | encoding_fixer.py        | python  |
 
-`Paths.swift` builds each command + environment (PATH with bundled ffmpeg,
-`PYTHONPATH=pylibs`) — the Swift equivalent of `server.js`'s `SPAWN_ENV`.
+`Paths.swift` builds each subprocess command + environment (PATH with bundled
+ffmpeg, `PYTHONPATH=pylibs`). `LyricsFetcher.swift` + `TagReader.swift` run
+in-process via `ToolRunner.runNative()` — no Python, no subprocess, no network
+library beyond `URLSession`.
 
 ## Build
 
@@ -29,7 +31,7 @@ options as native controls → a live console.
 ./scripts/build_dist.sh /path/to/your/music-tools
 ```
 
-`/path/to/your/music-tools` just needs the 5 scripts (and `pylibs/`).
+`/path/to/your/music-tools` just needs the 3 scripts (and `pylibs/`).
 
 ## Dev loop (no rebuild)
 
@@ -44,9 +46,9 @@ Swift, re-run.
 
 ```
 MusicTools.app/Contents/Resources/
-  scripts/   the 5 scripts
+  scripts/   flac_downsampler.sh  split-cue-unicode.pl  encoding_fixer.py
   pylibs/    vendored pure-python deps
-  vendor/python/arm64/bin/python3   relocatable Python + mutagen/requests/charset-normalizer
+  vendor/python/arm64/bin/python3   relocatable Python + mutagen/charset-normalizer
   vendor/bin/arm64/ffmpeg, ffprobe  static arm64
 ```
 

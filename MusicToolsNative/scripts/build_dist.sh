@@ -6,10 +6,10 @@ set -euo pipefail
 APP_NAME="MusicTools"
 REPO="${1:?Usage: build_dist.sh /path/to/your/music-tools}"
 ICON_SRC="${ICON_SRC:-/Users/aalien/sandbox/split-cue/build/icon.icns}"
-PY_LIBS="mutagen requests charset-normalizer"
+PY_LIBS="mutagen charset-normalizer"
 DEV_ID="${DEV_ID:-}"
 PB_ARCH=aarch64; VARCH=arm64
-SCRIPTS=(flac_downsampler.sh split-cue-unicode.pl audio_lyrics_fetcher.py encoding_fixer.py)
+SCRIPTS=(flac_downsampler.sh split-cue-unicode.pl encoding_fixer.py)
 [ "$(uname -m)" = arm64 ] || echo "warning: host isn't arm64" >&2
 
 # Locate the scripts up front and fail fast.

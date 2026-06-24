@@ -5,7 +5,7 @@ set -euo pipefail
 APP_NAME="MusicTools"
 REPO="${1:?Usage: build_app.sh /path/to/your/music-tools (dir holding the scripts)}"
 ICON_SRC="${ICON_SRC:-/Users/aalien/sandbox/split-cue/build/icon.icns}"
-SCRIPTS=(flac_downsampler.sh split-cue-unicode.pl audio_lyrics_fetcher.py encoding_fixer.py)
+SCRIPTS=(flac_downsampler.sh split-cue-unicode.pl encoding_fixer.py)
 
 # Locate the scripts up front (repo root or a scripts/ subdir) and fail fast.
 SRC=""
